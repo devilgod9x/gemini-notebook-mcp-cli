@@ -106,15 +106,18 @@ This MCP uses internal, undocumented APIs that Google can change at any time wit
 ### What to do when it breaks
 1. Check if the issue is widespread (Google may have deployed changes)
 2. Use Chrome DevTools to capture current request/response format
-3. Update the relevant RPC handling in `api_client.py`
+3. Update the relevant RPC handling in `core/base.py` / `core/client.py`
 4. Submit a PR or issue if you discover the fix
+
+Maintainers debugging exactly where a protocol change broke and how to fix it
+(not just the symptom) should see **[docs/PROTOCOL_MAINTENANCE.md](./PROTOCOL_MAINTENANCE.md)**.
 
 ---
 
 ## 5. CSRF Token and Session ID
 
 ### What it is
-The MCP auto-extracts CSRF token (`SNlM0e`) and session ID (`FdrFJe`) from the Gemini Notebook homepage on first use.
+The MCP auto-extracts CSRF token (`SNlM0e`) and session ID (`FdrFJe`, falling back to `f.sid=`) from the Gemini Notebook homepage on first use.
 
 ### When it breaks
 - If the homepage structure changes, extraction may fail
@@ -128,6 +131,9 @@ The MCP auto-extracts CSRF token (`SNlM0e`) and session ID (`FdrFJe`) from the G
 If auto-extraction fails:
 1. Manually extract tokens from Chrome DevTools Network tab
 2. Pass them via `save_auth_tokens(cookies=..., request_body=..., request_url=...)`
+
+To actually patch the extraction pattern (which file, which regex, how to confirm
+the fix), see **[docs/PROTOCOL_MAINTENANCE.md](./PROTOCOL_MAINTENANCE.md)**.
 
 ---
 

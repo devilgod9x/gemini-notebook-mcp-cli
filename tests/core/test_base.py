@@ -1,6 +1,7 @@
 # tests/core/test_base.py
 """Tests for BaseClient infrastructure class."""
 
+import threading
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -496,3 +497,62 @@ def test_extract_present_rpc_ids():
         [["di", 42]],  # non-wrb.fr noise must be ignored
     ]
     assert client._extract_present_rpc_ids(parsed) == ["abc123", "def456"]
+
+
+class TestRefreshAuthTokensSessionId:
+    """_refresh_auth_tokens() must extract the session ID through the shared
+    core.auth.extract_session_id_from_page() helper, not a narrower inline
+    regex — otherwise a pattern fix (e.g. adding the f.sid= fallback) only
+    takes effect for the CDP login path and not for homepage refresh."""
+
+    def _refreshed_client(self, monkeypatch, html: str):
+        from notebooklm_tools.core import base
+
+        class _FakeResponse:
+            url = "https://notebook.google.com/"
+            status_code = 200
+            text = html
+
+        class _FakeClient:
+            def __init__(self, *args, **kwargs):
+                self.cookies = httpx.Cookies()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def get(self, *args, **kwargs):
+                return _FakeResponse()
+
+        monkeypatch.setattr(httpx, "Client", _FakeClient)
+        monkeypatch.setattr(base.BaseClient, "_get_httpx_cookies", lambda self: {})
+        monkeypatch.setattr(
+            "notebooklm_tools.core.cookie_rotation.rotate_google_cookies", lambda c: None
+        )
+
+        client = base.BaseClient.__new__(base.BaseClient)
+        monkeypatch.setattr(
+            type(client), "_get_base_url", lambda self: "https://notebook.google.com"
+        )
+        monkeypatch.setattr(type(client), "_is_enterprise", lambda self: False)
+        client._is_env_auth = True  # skip disk cache writes in _update_cached_tokens
+        client.cookies = {}
+        client._state_lock = threading.Lock()
+        client._refresh_auth_tokens()
+        return client
+
+    def test_session_id_extracted_via_fdrfje(self, monkeypatch):
+        html = '<script>var x={"SNlM0e":"csrf-tok","FdrFJe":"1234567890"};</script>'
+        client = self._refreshed_client(monkeypatch, html)
+        assert client._session_id == "1234567890"
+
+    def test_session_id_falls_back_to_f_sid(self, monkeypatch):
+        # No FdrFJe anywhere on this page — only the f.sid= fallback pattern
+        # that extract_session_id_from_page() already supports. Regression
+        # guard for the divergence where _refresh_auth_tokens() used to regex
+        # FdrFJe directly and silently dropped this fallback.
+        html = '<script>var x={"SNlM0e":"csrf-tok"};f.sid=9876543210;</script>'
+        client = self._refreshed_client(monkeypatch, html)
+        assert client._session_id == "9876543210"

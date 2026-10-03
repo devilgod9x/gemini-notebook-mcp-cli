@@ -290,6 +290,23 @@ Only read API_REFERENCE.md when:
 - Adding new features
 - Understanding internal API behavior
 
+### Protocol Maintenance
+
+**When Google changes something and calls start failing**, see:
+
+**[docs/PROTOCOL_MAINTENANCE.md](./docs/PROTOCOL_MAINTENANCE.md)**
+
+This includes:
+- The end-to-end flow from cookie login to a successful RPC call, file by file
+- The 9 specific points most likely to break when Google ships a change (RPC ID
+  rotation, CSRF/session/build-label extraction, batchexecute URL/body format,
+  response envelope parsing, cookie structure, RotateCookies, domain rebrands)
+  — each with where it lives, how it fails, how to confirm it, and how to fix it
+- A checklist for confirming the protocol actually drifted before changing code
+
+Only read PROTOCOL_MAINTENANCE.md when a call that used to work starts failing
+for reasons that don't look like an auth/cookie problem.
+
 ### MCP Test Plan
 
 **For comprehensive MCP tool testing**, see:

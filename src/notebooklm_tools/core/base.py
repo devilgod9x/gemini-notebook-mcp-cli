@@ -1301,7 +1301,7 @@ class BaseClient:
 
             # Extract CSRF token — try multiple known key names in case Google changes
             # the primary key (SNlM0e). Falls back to 'at=' and 'FdrFJe' patterns.
-            from .auth import extract_csrf_from_page_source
+            from .auth import extract_csrf_from_page_source, extract_session_id_from_page
 
             csrf_token = extract_csrf_from_page_source(html)
             if not csrf_token:
@@ -1328,8 +1328,10 @@ class BaseClient:
                     f"The page structure may have changed."
                 )
 
-            # Extract session ID (FdrFJe) - optional but helps
-            sid_match = re.search(r'"FdrFJe":"([^"]+)"', html)
+            # Extract session ID (FdrFJe, falling back to f.sid=) - optional but helps.
+            # Shares the same helper as the CDP login path so a pattern fix only
+            # needs to happen in one place.
+            session_id = extract_session_id_from_page(html)
 
             # Extract build label (cfb2h) - keeps bl param current
             bl_match = re.search(r'"cfb2h":"([^"]+)"', html)
@@ -1339,8 +1341,8 @@ class BaseClient:
 
                 self.cookies = snapshot_cookie_input(self.cookies, client.cookies)
                 self.csrf_token = csrf_token
-                if sid_match:
-                    self._session_id = sid_match.group(1)
+                if session_id:
+                    self._session_id = session_id
                 if bl_match:
                     self._bl = bl_match.group(1)
 
