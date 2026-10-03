@@ -304,6 +304,9 @@ browser-based Gemini Notebook MCP — see the
 login, agent registration, and a step-by-step migration path that avoids
 the "two Gemini Notebook servers registered" trap.
 
+🇻🇳 Vietnamese speakers: see [Hướng dẫn sử dụng](docs/HUONG_DAN_SU_DUNG.md)
+for the same install → login → connect-an-AI-assistant walkthrough.
+
 ## Uninstalling
 
 To completely remove the MCP:
