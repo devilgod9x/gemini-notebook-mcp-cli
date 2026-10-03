@@ -10,6 +10,7 @@ Bundled inside the .mcpb extension and invoked via manifest.json:
 """
 
 import glob
+import json
 import os
 import platform
 import shutil
@@ -66,6 +67,32 @@ def _find_uvx() -> str | None:
     return None
 
 
+def _pinned_package_spec() -> str:
+    """Pin uvx to the package version shipped alongside this launcher.
+
+    manifest.json sits next to this script inside the packaged .mcpb extension,
+    and its version is bumped together with this file on every release (see
+    CLAUDE.md's version-alignment checklist). Reading it here means an
+    extension bundle always runs the exact code it was tested with, instead of
+    uvx silently pulling whatever is newest on PyPI at launch time. Falls back
+    to the unpinned package name if manifest.json can't be read (e.g. running
+    this script outside the packaged extension).
+    """
+    manifest_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "manifest.json")
+    try:
+        with open(manifest_path, encoding="utf-8") as f:
+            version = json.load(f)["version"]
+        return f"notebooklm-mcp-cli=={version}"
+    except Exception as exc:
+        print(
+            f"Warning: could not read version from {manifest_path} ({exc}).\n"
+            "Falling back to an unpinned 'uvx --from notebooklm-mcp-cli' — this may "
+            "run a different version than the one shipped with this extension.",
+            file=sys.stderr,
+        )
+        return "notebooklm-mcp-cli"
+
+
 def main() -> None:
     """Find uvx and launch the Gemini Notebook MCP server."""
     uvx = _find_uvx()
@@ -82,7 +109,7 @@ def main() -> None:
 
     # Run the MCP server — explicit stdio passthrough is critical because
     # Claude Desktop communicates with MCP servers via stdin/stdout JSON-RPC.
-    cmd = [uvx, "--from", "notebooklm-mcp-cli", "notebooklm-mcp", *sys.argv[1:]]
+    cmd = [uvx, "--from", _pinned_package_spec(), "notebooklm-mcp", *sys.argv[1:]]
     try:
         result = subprocess.run(
             cmd,

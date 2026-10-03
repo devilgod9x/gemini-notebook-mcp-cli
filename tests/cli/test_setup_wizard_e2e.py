@@ -494,7 +494,7 @@ def test_copy_json_advanced_uvx_entry_only(sandbox, run):
     assert snippet == {
         "gemini-notebook-mcp": {
             "command": "uvx",
-            "args": ["--from", "notebooklm-mcp-cli", "notebooklm-mcp"],
+            "args": ["--from", f"notebooklm-mcp-cli=={__version__}", "notebooklm-mcp"],
         }
     }
 

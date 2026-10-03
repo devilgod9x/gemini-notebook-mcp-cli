@@ -142,10 +142,17 @@ def start_mcp_background_probe(
 
     Captures target storage directory and backend factory at thread launch time
     to prevent thread from resolving dynamically during test environment teardown.
+
+    Disabled by default (opt in with NOTEBOOKLM_ENABLE_MCP_PROBE=1): this thread
+    only decides whether to show a one-time "consider Protected mode" notice, so
+    a server that wants minimal background activity can skip it entirely.
     """
     global _mcp_probe_thread
-    if not force and os.environ.get("PYTEST_CURRENT_TEST") and not _allow_mcp_bg_probe:
-        return
+    if not force:
+        if os.environ.get("PYTEST_CURRENT_TEST") and not _allow_mcp_bg_probe:
+            return
+        if os.environ.get("NOTEBOOKLM_ENABLE_MCP_PROBE", "").strip() != "1":
+            return
 
     if _mcp_probe_thread is not None and _mcp_probe_thread.is_alive():
         _mcp_probe_thread.join(timeout=2.0)

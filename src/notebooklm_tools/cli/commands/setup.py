@@ -1650,7 +1650,12 @@ def build_json_snippet(
     Defaults to the full detected binary path in an ``mcpServers`` wrapper.
     """
     if config_type == "uvx":
-        entry = {"command": "uvx", "args": ["--from", "notebooklm-mcp-cli", "notebooklm-mcp"]}
+        from notebooklm_tools import __version__
+
+        entry = {
+            "command": "uvx",
+            "args": ["--from", f"notebooklm-mcp-cli=={__version__}", "notebooklm-mcp"],
+        }
     else:
         entry = {"command": _default_server_command() if use_full_path else MCP_SERVER_CMD}
     return {"mcpServers": {MCP_SERVER_NAME: entry}} if wrap else {MCP_SERVER_NAME: entry}

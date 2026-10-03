@@ -23,9 +23,15 @@ def test_snippet_bare_command_when_not_full_path(monkeypatch):
 
 
 def test_snippet_uvx_and_unwrapped():
+    from notebooklm_tools import __version__
+
     snip = setup.build_json_snippet(config_type="uvx", wrap=False)
     assert snip[setup.MCP_SERVER_NAME]["command"] == "uvx"
-    assert snip[setup.MCP_SERVER_NAME]["args"] == ["--from", "notebooklm-mcp-cli", "notebooklm-mcp"]
+    assert snip[setup.MCP_SERVER_NAME]["args"] == [
+        "--from",
+        f"notebooklm-mcp-cli=={__version__}",
+        "notebooklm-mcp",
+    ]
     assert "mcpServers" not in snip
 
 

@@ -155,6 +155,8 @@ Environment Variables:
   NOTEBOOKLM_HL                     Interface language and default artifact language (default: en)
   NOTEBOOKLM_QUERY_TIMEOUT          Query timeout in seconds (default: 120.0)
   NOTEBOOKLM_RATE_LIMIT_MAX_RETRIES Retry count for HTTP 429/RPC resource limits (default: 3; 0 disables)
+  NOTEBOOKLM_ENABLE_MCP_PROBE       Set to 1 to enable the background OS-keystore probe that offers
+                                    a one-time Protected-mode notice (default: disabled)
 
 Examples:
   notebooklm-mcp                              # Default stdio transport
