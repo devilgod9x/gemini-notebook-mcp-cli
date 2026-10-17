@@ -98,6 +98,7 @@ MAPPING = {
     "list stale-sources": "source_list_drive",
     "login": CLI_ONLY,
     "login profile delete": CLI_ONLY,
+    "login profile forget-browser": CLI_ONLY,
     "login profile rename": CLI_ONLY,
     "login profile list": "profile",
     "login switch": "profile",

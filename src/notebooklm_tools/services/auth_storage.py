@@ -892,3 +892,87 @@ def discard_unsaved_profile(profile_name: str) -> None:
         marker.unlink()
     with contextlib.suppress(OSError):
         pdir.rmdir()  # only succeeds when empty
+
+
+class BrowserSessionForgetResult(TypedDict):
+    """Result of removing the saved browser logins that belong to an auth profile."""
+
+    profile: str
+    removed: list[str]
+    skipped_in_use: list[str]
+
+
+def get_browser_profile_dirs(profile_name: str) -> list[Path]:
+    """Return the existing browser login folders that belong to an auth profile.
+
+    These hold a long-lived signed-in Google session (cookies) that Protected
+    storage mode does not encrypt. Nothing is created: only folders that exist.
+    """
+    validate_profile_name(profile_name, strict=False)
+    storage = get_storage_dir()
+    candidates = [
+        storage / "chrome-profiles" / profile_name,
+        storage / "firefox-profiles" / profile_name,
+    ]
+    if profile_name == "default":
+        candidates.insert(0, storage / "chrome-profile")  # legacy single-profile location
+    return [p for p in candidates if os.path.lexists(p)]
+
+
+def _browser_dir_in_use(path: Path) -> bool:
+    # Chrome: SingletonLock; Firefox: parent.lock / lock. lexists also sees the
+    # dangling symlinks Chrome uses on POSIX.
+    return any(os.path.lexists(path / name) for name in ("SingletonLock", "parent.lock", "lock"))
+
+
+def _remove_tree(path: Path) -> None:
+    """Delete a folder, clearing read-only flags that block deletion on Windows.
+
+    A symlink is unlinked, never followed.
+    """
+    import shutil
+    import stat
+
+    if path.is_symlink():
+        path.unlink()
+        return
+
+    def _clear_readonly(func: Any, p: str, _exc: Any) -> None:
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_clear_readonly)
+    else:
+        shutil.rmtree(path, onerror=_clear_readonly)
+
+
+def forget_browser_session(profile_name: str, force: bool = False) -> BrowserSessionForgetResult:
+    """Delete the saved browser login folders of an auth profile.
+
+    The auth profile's own credentials are NOT touched. Without them the next
+    ``nlm login`` opens a fresh, signed-out browser, and automatic headless
+    re-authentication (``nlm auth refresh``) is unavailable until you log in again.
+
+    Args:
+        profile_name: Auth profile whose browser sessions to remove
+        force: Remove even if the browser looks like it is running
+
+    Returns:
+        Which folders were removed, and which were skipped because they are in use
+    """
+    removed: list[str] = []
+    skipped: list[str] = []
+    for path in get_browser_profile_dirs(profile_name):
+        if not force and _browser_dir_in_use(path):
+            skipped.append(str(path))
+            continue
+        try:
+            _remove_tree(path)
+        except OSError as exc:
+            raise ServiceError(
+                f"Could not remove browser session folder {path}: {exc}",
+                user_message=f"Could not remove {path}. Close the browser and try again.",
+            ) from exc
+        removed.append(str(path))
+    return BrowserSessionForgetResult(profile=profile_name, removed=removed, skipped_in_use=skipped)

@@ -970,6 +970,70 @@ def profile_delete(
     auth.delete_profile()
     console.print(f"[green]✓[/green] Deleted profile: {profile}")
 
+    # The saved browser login is a separate, unencrypted Google session. Remove it
+    # too, otherwise "delete" would leave a way back into the account on disk.
+    from notebooklm_tools.services.auth_storage import forget_browser_session
+
+    try:
+        result = forget_browser_session(profile)
+    except Exception as exc:
+        console.print(f"[yellow]![/yellow] Could not remove the saved browser login: {exc}")
+        return
+    for path in result["removed"]:
+        console.print(f"[green]✓[/green] Removed saved browser login: {path}")
+    for path in result["skipped_in_use"]:
+        console.print(
+            f"[yellow]![/yellow] Browser login not removed (browser looks open): {path}\n"
+            f"  Close the browser, then run: nlm login profile forget-browser {profile}"
+        )
+
+
+@profile_app.command("forget-browser")
+def profile_forget_browser(
+    profile: str = typer.Argument(..., help="Profile whose saved browser login to remove"),
+    confirm: bool = typer.Option(False, "--confirm", "-y", help="Skip confirmation prompt"),
+    force: bool = typer.Option(
+        False, "--force", help="Remove even if the browser looks like it is running"
+    ),
+) -> None:
+    """Delete the saved browser login (Chrome/Firefox session) of a profile.
+
+    The browser keeps a long-lived signed-in Google session that Protected storage
+    mode does not encrypt. Your saved nlm credentials are kept, but the next
+    `nlm login` starts from a signed-out browser and `nlm auth refresh` (headless
+    re-authentication) stops working until you log in again.
+    """
+    from notebooklm_tools.services.auth_storage import (
+        forget_browser_session,
+        get_browser_profile_dirs,
+    )
+    from notebooklm_tools.services.errors import ServiceError
+
+    try:
+        dirs = get_browser_profile_dirs(profile)
+        if not dirs:
+            console.print(f"[dim]No saved browser login for profile '{profile}'.[/dim]")
+            return
+        if not confirm:
+            typer.confirm(
+                f"Delete the saved browser login for '{profile}' ({len(dirs)} folder(s))? "
+                "Headless re-authentication will stop working until you log in again.",
+                abort=True,
+            )
+        result = forget_browser_session(profile, force=force)
+    except (ServiceError, ValueError) as exc:
+        console.print(f"[red]Error:[/red] {getattr(exc, 'user_message', exc)}")
+        raise typer.Exit(1) from exc
+
+    for path in result["removed"]:
+        console.print(f"[green]✓[/green] Removed: {path}")
+    for path in result["skipped_in_use"]:
+        console.print(
+            f"[yellow]![/yellow] Skipped (browser looks open): {path}. Close it, or pass --force."
+        )
+    if result["skipped_in_use"]:
+        raise typer.Exit(1)
+
 
 @profile_app.command("rename")
 def profile_rename(
