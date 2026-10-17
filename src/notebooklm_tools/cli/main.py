@@ -1123,6 +1123,10 @@ def storage_status(
                     console.print(
                         "  [yellow]Plain login files also present (auth.json/cookies.json)[/yellow]"
                     )
+            if status.get("plaintext_warning"):
+                console.print(
+                    f"  [bold yellow]Warning:[/bold yellow] {status['plaintext_warning']}"
+                )
             if status.get("protected_residue"):
                 console.print(
                     f"  [yellow]Protected residue present:[/yellow] {status.get('conflict_details')}"

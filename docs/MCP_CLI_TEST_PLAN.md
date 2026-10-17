@@ -83,7 +83,7 @@ Check my NotebookLM credential storage mode and test switching between file mode
 **Expected:**
 1. `nlm auth storage status`: Shows profile name, storage mode (`file` or `protected`), and presence of ciphertext or legacy files.
 2. `nlm auth storage set protected`: Encrypts credentials to `credentials.enc` using the OS keystore (macOS Keychain, Windows Credential Manager, Linux SecretService) and removes plaintext files.
-3. `nlm auth storage set file`: Decrypts credentials back to `cookies.json` with 0600 permissions.
+3. `nlm auth storage set file`: Decrypts credentials back to `cookies.json` (0600 permissions on macOS/Linux; none are set on Windows).
 
 ---
 

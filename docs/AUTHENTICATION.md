@@ -295,7 +295,7 @@ SID=abc123...; HSID=xyz789...; SSID=...; APISID=...; SAPISID=...; __Secure-1PSID
 
 ### Overview
 
-By default, `notebooklm-mcp-cli` stores login cookies in readable JSON files (`file` mode) with `0600` permissions.
+By default, `notebooklm-mcp-cli` stores login cookies in readable JSON files (`file` mode). On macOS and Linux these files get `0600` permissions. **On Windows the app does not set or check file permissions**, so the files are protected only by your user profile's inherited permissions: any program running as your Windows user can read them. These are Google session cookies, so they give access to your whole Google account (Gmail, Drive, ...), not only NotebookLM. On Windows, prefer Protected mode (`nlm auth storage set protected`); `nlm auth storage status` and `nlm doctor` warn when a profile is in File mode.
 
 In **Protected mode**, your cookies and session tokens are encrypted on disk with AES-256-GCM (`credentials.enc`). The encryption key is generated uniquely for your computer and stored in your operating system's native keystore:
 - **macOS:** macOS Keychain
@@ -389,7 +389,7 @@ If you need plain-text JSON credentials back (for example, to inspect them or us
 nlm auth storage set file --profile <name>
 ```
 
-This decrypts the credentials and writes readable JSON files with `0600` permissions.
+This decrypts the credentials and writes readable JSON files (`0600` on macOS/Linux; on Windows no private permissions are set).
 
 ### macOS "Always Allow" Prompt
 
@@ -463,7 +463,7 @@ All data is stored under `~/.notebooklm-mcp-cli/`:
 ```
 
 - In **Protected mode**, credentials live in `credentials.enc`. No plaintext cookies or `auth.json` files exist on disk.
-- In **File mode**, credentials live in `cookies.json` (and the configured default profile is mirrored to root `auth.json` for backwards compatibility with external scripts), secured with `0600` permissions.
+- In **File mode**, credentials live in `cookies.json` (and the configured default profile is mirrored to root `auth.json` for backwards compatibility with external scripts), secured with `0600` permissions on macOS/Linux only (no private permissions are set on Windows). To stop writing the root `auth.json` copy, set `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR=1`; an existing copy is not deleted for you, so remove it yourself once no script reads it.
 - In both modes, `metadata.json` stores non-secret profile metadata (account email, base host, build label, and storage mode setting).
 
 ---

@@ -138,7 +138,7 @@ src/notebooklm_tools/
 
 **Credential Storage Modes:**
 - **Protected mode (recommended for personal computers):** Credentials encrypted at rest (`credentials.enc`) with keys in OS keystore (macOS Keychain, Windows Credential Manager, Linux SecretService). Managed via `nlm auth storage status`, `set protected|file`, `resolve`, and `relocate`.
-- **File mode (default / servers / cron / Docker):** Plaintext cookies stored with `0600` permissions.
+- **File mode (default / servers / cron / Docker):** Plaintext cookies. On macOS/Linux they are stored with `0600` permissions. **On Windows the app does not set or verify an ACL**, so the files are protected only by the inherited permissions of the user profile and any process running as that user can read them. These are Google account session cookies, so a leak exposes the whole Google account. `nlm auth storage status` and `nlm doctor` warn about this on Windows. Set `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR=1` to stop writing the root `auth.json` copy of the default profile.
 - **First login:** for a NEW profile `nlm login` asks plain vs protected before the browser opens (only in a desktop terminal; `--storage protected|file` skips it). The marker is written right before the first save and rolled back if the save fails; the answer is recorded only after success.
 - **Safety rule for AI assistants:** Never print decrypted credentials, cookies, or raw keystore values. Output redacted diagnostics only.
 

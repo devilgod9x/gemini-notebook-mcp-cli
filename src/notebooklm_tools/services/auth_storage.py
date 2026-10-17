@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -35,6 +36,7 @@ class StorageStatusResult(TypedDict, total=False):
     conflict_details: str | None
     has_pending_op: bool
     pending_op_details: str | None
+    plaintext_warning: str | None
 
 
 class StorageSetResult(TypedDict):
@@ -44,6 +46,25 @@ class StorageSetResult(TypedDict):
     mode: str
     status: str
     message: str
+
+
+WINDOWS_FILE_MODE_WARNING = (
+    "File mode keeps your Google session cookies in plain text. On Windows the "
+    "0600 permission is not enforced, so any program running as your Windows user "
+    "can read them, and they would give access to your whole Google account. "
+    "Run 'nlm auth storage set protected' to encrypt them with the Windows "
+    "Credential Manager."
+)
+
+
+def get_plaintext_warning(mode: str) -> str | None:
+    """Return a security warning when plain-text logins are used on Windows.
+
+    Other platforms enforce owner-only file permissions, so they get no warning.
+    """
+    if mode == "file" and sys.platform == "win32":
+        return WINDOWS_FILE_MODE_WARNING
+    return None
 
 
 def get_storage_status(profile_name: str | None = None) -> StorageStatusResult:
@@ -124,6 +145,7 @@ def get_storage_status(profile_name: str | None = None) -> StorageStatusResult:
         conflict_details=conflict_details,
         has_pending_op=has_pending_op,
         pending_op_details=pending_op_details,
+        plaintext_warning=get_plaintext_warning(mode),
     )
 
 

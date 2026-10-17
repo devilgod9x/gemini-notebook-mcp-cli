@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Windows plain-text login warning.** `nlm auth storage status` (and `--json`, as `plaintext_warning`) and `nlm doctor` now warn when a profile is in File mode on Windows. The app does not set or check file permissions on Windows, so the saved Google session cookies are readable by any program running as your Windows user and give access to the whole Google account. The warning points to `nlm auth storage set protected`.
+- **New `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR=1` option.** Stops writing the root `auth.json` copy of the default profile in File mode. That copy only exists for old external scripts and doubles the plain-text exposure. It is opt-in so existing scripts keep working, and an already-existing root `auth.json` is not deleted for you.
+
+### Fixed
+- Docs no longer claim plain-text cookies are always stored with `0600` permissions. That is true on macOS/Linux only; the Windows behaviour is now stated in `AUTHENTICATION.md`, `CLAUDE.md`, `AGENTS.md`, the test plan and the Vietnamese guide.
+
 ## [0.16.0] - 2026-10-17
 
 ### ⚠️ Breaking changes
