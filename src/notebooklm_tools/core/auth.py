@@ -77,6 +77,13 @@ class AuthTokens:
         return "; ".join(f"{k}={v}" for k, v in cookies.items())
 
 
+# Set to "1" to stop writing the root auth.json copy of the default profile in
+# File mode. That copy exists for backwards compatibility with external scripts
+# and doubles the plain-text exposure of the Google session cookies. An existing
+# root auth.json is left in place; delete it yourself once nothing reads it.
+DISABLE_ROOT_AUTH_MIRROR_ENV = "NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR"
+
+
 def get_cache_path() -> Path:
     """Get the path to the auth cache file.
 
@@ -256,7 +263,11 @@ def save_tokens_to_cache(
             else:
                 raise StaleRevisionError(target_profile, expected_revision, None)
 
-        if disk_mode == "file" and target_profile == default_profile:
+        if (
+            disk_mode == "file"
+            and target_profile == default_profile
+            and os.environ.get(DISABLE_ROOT_AUTH_MIRROR_ENV) != "1"
+        ):
             root_cache = get_cache_path()
             root_data = {
                 "cookies": tokens.cookies,

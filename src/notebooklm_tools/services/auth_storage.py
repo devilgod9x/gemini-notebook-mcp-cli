@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -35,6 +36,7 @@ class StorageStatusResult(TypedDict, total=False):
     conflict_details: str | None
     has_pending_op: bool
     pending_op_details: str | None
+    plaintext_warning: str | None
 
 
 class StorageSetResult(TypedDict):
@@ -44,6 +46,25 @@ class StorageSetResult(TypedDict):
     mode: str
     status: str
     message: str
+
+
+WINDOWS_FILE_MODE_WARNING = (
+    "File mode keeps your Google session cookies in plain text. On Windows the "
+    "0600 permission is not enforced, so any program running as your Windows user "
+    "can read them, and they would give access to your whole Google account. "
+    "Run 'nlm auth storage set protected' to encrypt them with the Windows "
+    "Credential Manager, or 'nlm auth storage harden' to limit the folder to your user."
+)
+
+
+def get_plaintext_warning(mode: str) -> str | None:
+    """Return a security warning when plain-text logins are used on Windows.
+
+    Other platforms enforce owner-only file permissions, so they get no warning.
+    """
+    if mode == "file" and sys.platform == "win32":
+        return WINDOWS_FILE_MODE_WARNING
+    return None
 
 
 def get_storage_status(profile_name: str | None = None) -> StorageStatusResult:
@@ -124,6 +145,7 @@ def get_storage_status(profile_name: str | None = None) -> StorageStatusResult:
         conflict_details=conflict_details,
         has_pending_op=has_pending_op,
         pending_op_details=pending_op_details,
+        plaintext_warning=get_plaintext_warning(mode),
     )
 
 
@@ -870,3 +892,177 @@ def discard_unsaved_profile(profile_name: str) -> None:
         marker.unlink()
     with contextlib.suppress(OSError):
         pdir.rmdir()  # only succeeds when empty
+
+
+class BrowserSessionForgetResult(TypedDict):
+    """Result of removing the saved browser logins that belong to an auth profile."""
+
+    profile: str
+    removed: list[str]
+    skipped_in_use: list[str]
+
+
+def get_browser_profile_dirs(profile_name: str) -> list[Path]:
+    """Return the existing browser login folders that belong to an auth profile.
+
+    These hold a long-lived signed-in Google session (cookies) that Protected
+    storage mode does not encrypt. Nothing is created: only folders that exist.
+    """
+    validate_profile_name(profile_name, strict=False)
+    storage = get_storage_dir()
+    candidates = [
+        storage / "chrome-profiles" / profile_name,
+        storage / "firefox-profiles" / profile_name,
+    ]
+    if profile_name == "default":
+        candidates.insert(0, storage / "chrome-profile")  # legacy single-profile location
+    return [p for p in candidates if os.path.lexists(p)]
+
+
+def _browser_dir_in_use(path: Path) -> bool:
+    # Chrome: SingletonLock; Firefox: parent.lock / lock. lexists also sees the
+    # dangling symlinks Chrome uses on POSIX.
+    return any(os.path.lexists(path / name) for name in ("SingletonLock", "parent.lock", "lock"))
+
+
+def _remove_tree(path: Path) -> None:
+    """Delete a folder, clearing read-only flags that block deletion on Windows.
+
+    A symlink is unlinked, never followed.
+    """
+    import shutil
+    import stat
+
+    if path.is_symlink():
+        path.unlink()
+        return
+
+    def _clear_readonly(func: Any, p: str, _exc: Any) -> None:
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_clear_readonly)
+    else:
+        shutil.rmtree(path, onerror=_clear_readonly)
+
+
+def forget_browser_session(profile_name: str, force: bool = False) -> BrowserSessionForgetResult:
+    """Delete the saved browser login folders of an auth profile.
+
+    The auth profile's own credentials are NOT touched. Without them the next
+    ``nlm login`` opens a fresh, signed-out browser, and automatic headless
+    re-authentication (``nlm auth refresh``) is unavailable until you log in again.
+
+    Args:
+        profile_name: Auth profile whose browser sessions to remove
+        force: Remove even if the browser looks like it is running
+
+    Returns:
+        Which folders were removed, and which were skipped because they are in use
+    """
+    removed: list[str] = []
+    skipped: list[str] = []
+    for path in get_browser_profile_dirs(profile_name):
+        if not force and _browser_dir_in_use(path):
+            skipped.append(str(path))
+            continue
+        try:
+            _remove_tree(path)
+        except OSError as exc:
+            raise ServiceError(
+                f"Could not remove browser session folder {path}: {exc}",
+                user_message=f"Could not remove {path}. Close the browser and try again.",
+            ) from exc
+        removed.append(str(path))
+    return BrowserSessionForgetResult(profile=profile_name, removed=removed, skipped_in_use=skipped)
+
+
+class StorageHardenResult(TypedDict):
+    """Result of restricting the storage folder to its owner."""
+
+    supported: bool
+    path: str
+    command: list[str]
+    applied: bool
+
+
+_SYSTEM_SID = "S-1-5-18"  # Local System: keeps Windows Defender and backups working
+
+
+def _current_user_sid() -> str:
+    """Return the Windows SID of the current user (via `whoami /user`)."""
+    import csv
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["whoami", "/user", "/fo", "csv", "/nh"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+        row = next(csv.reader(proc.stdout.splitlines()))
+        sid = row[1].strip()
+    except (OSError, subprocess.SubprocessError, StopIteration, IndexError) as exc:
+        raise ServiceError(
+            f"Could not determine the current Windows user SID: {exc}",
+            user_message="Could not determine your Windows user. Nothing was changed.",
+        ) from exc
+    if not sid.startswith("S-1-"):
+        raise ServiceError(
+            f"Unexpected SID from whoami: {sid!r}",
+            user_message="Could not determine your Windows user. Nothing was changed.",
+        )
+    return sid
+
+
+def harden_storage_permissions(dry_run: bool = False) -> StorageHardenResult:
+    """Restrict the storage folder (~/.notebooklm-mcp-cli) to the current user on Windows.
+
+    Windows does not honour the 0600/0700 modes the app requests, so the folder
+    normally just inherits the user profile's ACL. This removes inherited access
+    and grants full control only to the current user and Local System (kept so
+    antivirus and backup services keep working). Sub-folders and files created
+    afterwards inherit it. Other platforms enforce owner-only modes already, so
+    this does nothing there.
+
+    Args:
+        dry_run: Return the command that would run without running it
+    """
+    storage = get_storage_dir()
+    if sys.platform != "win32":
+        return StorageHardenResult(supported=False, path=str(storage), command=[], applied=False)
+
+    sid = _current_user_sid()
+    command = [
+        "icacls",
+        str(storage),
+        "/inheritance:r",
+        "/grant:r",
+        f"*{sid}:(OI)(CI)F",
+        "/grant:r",
+        f"*{_SYSTEM_SID}:(OI)(CI)F",
+    ]
+    if dry_run:
+        return StorageHardenResult(
+            supported=True, path=str(storage), command=command, applied=False
+        )
+
+    import subprocess
+
+    try:
+        proc = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ServiceError(
+            f"icacls failed to run: {exc}",
+            user_message="Could not run icacls. Permissions were not changed.",
+        ) from exc
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()[:300]
+        raise ServiceError(
+            f"icacls exited with {proc.returncode}: {detail}",
+            user_message=f"icacls could not change the permissions: {detail}",
+        )
+    return StorageHardenResult(supported=True, path=str(storage), command=command, applied=True)

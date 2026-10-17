@@ -215,6 +215,9 @@ def _check_authentication(verbose: bool) -> bool:
         else:
             console.print("  Keystore: unavailable or locked (keeping file mode)")
 
+        if storage_status.get("plaintext_warning"):
+            console.print(f"  [yellow]Warning:[/yellow] {storage_status['plaintext_warning']}")
+
         if storage_status.get("has_conflict"):
             console.print(
                 f"  Conflict: [bold red]yes ({storage_status.get('conflict_details')})[/bold red]"

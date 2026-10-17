@@ -76,7 +76,9 @@ nao (chi hoi tren may ban, khong hoi khi chay tren server/cron):
   keystore (Keychain tren macOS, Credential Manager tren Windows,
   SecretService/KWallet tren Linux).
 - **File (mac dinh, hop ly cho server/cron/Docker)** — luu file plaintext,
-  quyen file `0600` (chi chu tien trinh doc duoc).
+  quyen file `0600` tren macOS/Linux (chi chu so huu doc duoc). **Tren Windows ung dung khong dat
+  quyen rieng**, nen bat ky chuong trinh nao chay duoi tai khoan Windows cua ban deu doc duoc cookie
+  Google (mo ca tai khoan Google). Tren Windows nen chon Protected.
 
 Chon truoc bang flag neu khong muon bi hoi:
 

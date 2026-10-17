@@ -295,7 +295,7 @@ SID=abc123...; HSID=xyz789...; SSID=...; APISID=...; SAPISID=...; __Secure-1PSID
 
 ### Overview
 
-By default, `notebooklm-mcp-cli` stores login cookies in readable JSON files (`file` mode) with `0600` permissions.
+By default, `notebooklm-mcp-cli` stores login cookies in readable JSON files (`file` mode). On macOS and Linux these files get `0600` permissions. **On Windows the app does not set or check file permissions**, so the files are protected only by your user profile's inherited permissions: any program running as your Windows user can read them. These are Google session cookies, so they give access to your whole Google account (Gmail, Drive, ...), not only NotebookLM. On Windows, prefer Protected mode (`nlm auth storage set protected`); `nlm auth storage status` and `nlm doctor` warn when a profile is in File mode.
 
 In **Protected mode**, your cookies and session tokens are encrypted on disk with AES-256-GCM (`credentials.enc`). The encryption key is generated uniquely for your computer and stored in your operating system's native keystore:
 - **macOS:** macOS Keychain
@@ -389,7 +389,7 @@ If you need plain-text JSON credentials back (for example, to inspect them or us
 nlm auth storage set file --profile <name>
 ```
 
-This decrypts the credentials and writes readable JSON files with `0600` permissions.
+This decrypts the credentials and writes readable JSON files (`0600` on macOS/Linux; on Windows no private permissions are set).
 
 ### macOS "Always Allow" Prompt
 
@@ -427,6 +427,27 @@ User-configured scheduler jobs (`launchd`, `cron`, Windows Task Scheduler runnin
 - **What it does NOT protect against:** Other code running as your user account on the same computer (any process running under your user session can request the key from the OS keystore).
 - **Other credential surfaces:** Protected mode secures `notebooklm-mcp-cli`'s stored credentials. It does not alter browser profiles (`chrome-profiles/`, Firefox SQLite databases), manual `cookies.txt` exports left on disk, `NOTEBOOKLM_COOKIES` environment variables in shell configs, legacy `~/.notebooklm-mcp/auth.json` files, or authenticated debug artifacts (`debug_page.html`).
 
+### Saved browser logins (`chrome-profiles/`, `firefox-profiles/`)
+
+Besides the credentials above, `nlm login` keeps a browser folder per profile so that
+automatic headless re-authentication works. That folder holds a **long-lived, signed-in
+Google session in plain form**, and Protected mode does not encrypt it.
+
+- `nlm login profile delete <name>` removes the credentials **and** this browser folder
+  (it skips the folder and tells you if the browser looks open).
+- `nlm login profile forget-browser <name>` removes only the browser folder and keeps your
+  saved credentials. The next `nlm login` starts signed out, and `nlm auth refresh`
+  (headless) does not work until you log in again. Add `--force` if a stale lock file makes
+  the browser look open.
+
+### Restricting the folder on Windows (`nlm auth storage harden`)
+
+Windows ignores the `0600`/`0700` modes, so the storage folder only inherits your user
+profile's permissions. `nlm auth storage harden` (Windows only, opt-in) runs `icacls` to
+remove inherited access and give full control only to your user and Local System. Use
+`--dry-run` to see the exact command first. It does not encrypt anything; Protected mode is
+still the stronger option.
+
 ### Environment Override (`NLM_AUTH_STORAGE`)
 
 You can temporarily force the storage mode for testing using the `NLM_AUTH_STORAGE` environment variable (`file` or `protected`). If `NLM_AUTH_STORAGE` disagrees with the on-disk profile setting, mutating commands (`set` and `resolve`) refuse with an error until the variable is unset.
@@ -463,7 +484,7 @@ All data is stored under `~/.notebooklm-mcp-cli/`:
 ```
 
 - In **Protected mode**, credentials live in `credentials.enc`. No plaintext cookies or `auth.json` files exist on disk.
-- In **File mode**, credentials live in `cookies.json` (and the configured default profile is mirrored to root `auth.json` for backwards compatibility with external scripts), secured with `0600` permissions.
+- In **File mode**, credentials live in `cookies.json` (and the configured default profile is mirrored to root `auth.json` for backwards compatibility with external scripts), secured with `0600` permissions on macOS/Linux only (no private permissions are set on Windows). To stop writing the root `auth.json` copy, set `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR=1`; an existing copy is not deleted for you, so remove it yourself once no script reads it.
 - In both modes, `metadata.json` stores non-secret profile metadata (account email, base host, build label, and storage mode setting).
 
 ---

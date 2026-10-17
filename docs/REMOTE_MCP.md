@@ -58,7 +58,22 @@ for current client and network requirements.
 
 ## Security Warning
 
-Gemini Notebook MCP has no built-in authentication for its HTTP endpoint.
+Gemini Notebook MCP has no authentication for its HTTP endpoint **unless you turn it on**.
+
+To require a bearer token on every HTTP/SSE request, set `NOTEBOOKLM_MCP_AUTH_TOKEN` to a
+random string of at least 16 characters before starting the server (use an environment
+variable, not a command-line flag, so it does not show up in process lists):
+
+```bash
+export NOTEBOOKLM_MCP_AUTH_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+notebooklm-mcp --transport http
+# clients must send:  Authorization: Bearer <that token>
+```
+
+Requests without the right token get `401`. This stops other local processes from using your
+saved Google session through the port. It is **not** encryption: use TLS in front of it for
+anything that leaves your machine. Clients that cannot send a custom `Authorization` header
+cannot use this option.
 
 By default, the server only binds to loopback addresses. It refuses external
 binding unless `NOTEBOOKLM_ALLOW_EXTERNAL_BIND=1` is set. That override only

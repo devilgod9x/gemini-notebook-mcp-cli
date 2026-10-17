@@ -85,6 +85,8 @@ save_auth_tokens(cookies=<cookie_header>)
 | `NOTEBOOKLM_HL` | No | Interface language and default artifact language (default: `en`) |
 | `NOTEBOOKLM_RPC_OVERRIDES` | No | Hot-patch rotated batchexecute RPC method IDs without a release. JSON object mapping `BaseClient` RPC attribute names to new IDs, e.g. `{"RPC_LIST_NOTEBOOKS": "abc123"}` |
 | `NOTEBOOKLM_DISABLE_HEADLESS_REFRESH` | No | Set to `1` to disable the automatic headless self-heal and `nlm auth refresh`. Use on Google Workspace accounts whose session is revoked when the saved browser profile is relaunched (issue #330) |
+| `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR` | No | Set to `1` to stop writing the root `auth.json` copy of the default profile in File mode (kept only for old external scripts; it doubles the plain-text exposure). An existing root `auth.json` is not deleted automatically |
+| `NOTEBOOKLM_MCP_AUTH_TOKEN` | No | Set to a 16+ character secret to require `Authorization: Bearer <token>` on every HTTP/SSE MCP request (middleware in `mcp/http_auth.py`). Off by default; the server refuses to start with a shorter token |
 | `NOTEBOOKLM_ENABLE_MCP_PROBE` | No | Set to `1` to enable the background OS-keystore probe thread the MCP server starts on launch, which decides whether to attach a one-time "consider Protected mode" notice to a tool response. Disabled by default so the server has no non-essential background activity. |
 
 ### Resilience: rotated RPC IDs
@@ -166,7 +168,7 @@ src/notebooklm_tools/
 
 **Credential Storage Modes:**
 - **Protected mode (recommended for personal computers):** Credentials are encrypted at rest (`credentials.enc`) with keys in the OS keystore (macOS Keychain, Windows Credential Manager, Linux SecretService). Managed via `nlm auth storage status`, `set protected|file`, `resolve`, and `relocate`.
-- **File mode (default / servers / cron / Docker):** Plaintext cookies stored with `0600` permissions.
+- **File mode (default / servers / cron / Docker):** Plaintext cookies. On macOS/Linux they are stored with `0600` permissions. **On Windows the app does not set or verify an ACL**, so the files are protected only by the inherited permissions of the user profile and any process running as that user can read them. These are Google account session cookies, so a leak exposes the whole Google account. `nlm auth storage status` and `nlm doctor` warn about this on Windows. Set `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR=1` to stop writing the root `auth.json` copy of the default profile.
 - **First login:** for a NEW profile `nlm login` asks plain vs protected before the browser opens (only in a desktop terminal; `--storage protected|file` skips it). The marker is written right before the first save and rolled back if the save fails; the answer is recorded only after success.
 - **Safety rule for AI assistants:** Never print decrypted credentials, cookies, or raw keystore values. Output redacted diagnostics only.
 
