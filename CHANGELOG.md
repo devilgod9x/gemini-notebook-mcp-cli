@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-17
+
 ### ⚠️ Breaking changes
 - **Pipelines and batch Studio now require explicit confirmation.** Closes the paths that skipped the approval the standalone `notebook_delete` / `studio_create` tools already enforce.
   - `pipeline(action="run")` (MCP) needs `confirm=True` when any step is `notebook_delete` (irreversible) or `studio_create` (uses Studio quota). Every step is checked before the first one runs, so a destructive step at the end blocks the whole run. **All three built-in pipelines** (`ingest-and-podcast`, `research-and-report`, `multi-format`) contain `studio_create`, so they need it too.
