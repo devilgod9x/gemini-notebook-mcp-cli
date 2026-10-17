@@ -427,6 +427,27 @@ User-configured scheduler jobs (`launchd`, `cron`, Windows Task Scheduler runnin
 - **What it does NOT protect against:** Other code running as your user account on the same computer (any process running under your user session can request the key from the OS keystore).
 - **Other credential surfaces:** Protected mode secures `notebooklm-mcp-cli`'s stored credentials. It does not alter browser profiles (`chrome-profiles/`, Firefox SQLite databases), manual `cookies.txt` exports left on disk, `NOTEBOOKLM_COOKIES` environment variables in shell configs, legacy `~/.notebooklm-mcp/auth.json` files, or authenticated debug artifacts (`debug_page.html`).
 
+### Saved browser logins (`chrome-profiles/`, `firefox-profiles/`)
+
+Besides the credentials above, `nlm login` keeps a browser folder per profile so that
+automatic headless re-authentication works. That folder holds a **long-lived, signed-in
+Google session in plain form**, and Protected mode does not encrypt it.
+
+- `nlm login profile delete <name>` removes the credentials **and** this browser folder
+  (it skips the folder and tells you if the browser looks open).
+- `nlm login profile forget-browser <name>` removes only the browser folder and keeps your
+  saved credentials. The next `nlm login` starts signed out, and `nlm auth refresh`
+  (headless) does not work until you log in again. Add `--force` if a stale lock file makes
+  the browser look open.
+
+### Restricting the folder on Windows (`nlm auth storage harden`)
+
+Windows ignores the `0600`/`0700` modes, so the storage folder only inherits your user
+profile's permissions. `nlm auth storage harden` (Windows only, opt-in) runs `icacls` to
+remove inherited access and give full control only to your user and Local System. Use
+`--dry-run` to see the exact command first. It does not encrypt anything; Protected mode is
+still the stronger option.
+
 ### Environment Override (`NLM_AUTH_STORAGE`)
 
 You can temporarily force the storage mode for testing using the `NLM_AUTH_STORAGE` environment variable (`file` or `protected`). If `NLM_AUTH_STORAGE` disagrees with the on-disk profile setting, mutating commands (`set` and `resolve`) refuse with an error until the variable is unset.

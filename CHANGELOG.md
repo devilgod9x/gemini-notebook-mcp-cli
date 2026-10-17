@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Windows plain-text login warning.** `nlm auth storage status` (and `--json`, as `plaintext_warning`) and `nlm doctor` now warn when a profile is in File mode on Windows. The app does not set or check file permissions on Windows, so the saved Google session cookies are readable by any program running as your Windows user and give access to the whole Google account. The warning points to `nlm auth storage set protected`.
 - **New `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR=1` option.** Stops writing the root `auth.json` copy of the default profile in File mode. That copy only exists for old external scripts and doubles the plain-text exposure. It is opt-in so existing scripts keep working, and an already-existing root `auth.json` is not deleted for you.
 
+- **`nlm login profile delete` now also removes the saved browser login.** It used to delete the credentials but leave `chrome-profiles/<name>` and `firefox-profiles/<name>`, which hold a separate, unencrypted, long-lived signed-in Google session. If the browser looks open, the folder is skipped and you are told how to remove it. Behaviour change: deleting a profile now also deletes its browser login.
+- **New `nlm login profile forget-browser <profile>`** removes only the saved browser login and keeps your credentials (`-y` to skip the prompt, `--force` for a stale lock). Headless re-authentication (`nlm auth refresh`) stops working until the next login.
+- **New `nlm auth storage harden` (Windows).** Opt-in: uses `icacls` to remove inherited access from the storage folder and grant only your user and Local System, since Windows ignores `0600`/`0700`. `--dry-run` shows the command; nothing changes on macOS/Linux.
+- **Optional bearer-token auth for the HTTP/SSE MCP transports.** Set `NOTEBOOKLM_MCP_AUTH_TOKEN` (16+ characters) and every request must carry `Authorization: Bearer <token>`, so other local processes can no longer use your saved session through the port. Off by default; the server now prints a note on startup saying whether auth is on.
+
 ### Fixed
 - Docs no longer claim plain-text cookies are always stored with `0600` permissions. That is true on macOS/Linux only; the Windows behaviour is now stated in `AUTHENTICATION.md`, `CLAUDE.md`, `AGENTS.md`, the test plan and the Vietnamese guide.
 

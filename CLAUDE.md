@@ -86,6 +86,7 @@ save_auth_tokens(cookies=<cookie_header>)
 | `NOTEBOOKLM_RPC_OVERRIDES` | No | Hot-patch rotated batchexecute RPC method IDs without a release. JSON object mapping `BaseClient` RPC attribute names to new IDs, e.g. `{"RPC_LIST_NOTEBOOKS": "abc123"}` |
 | `NOTEBOOKLM_DISABLE_HEADLESS_REFRESH` | No | Set to `1` to disable the automatic headless self-heal and `nlm auth refresh`. Use on Google Workspace accounts whose session is revoked when the saved browser profile is relaunched (issue #330) |
 | `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR` | No | Set to `1` to stop writing the root `auth.json` copy of the default profile in File mode (kept only for old external scripts; it doubles the plain-text exposure). An existing root `auth.json` is not deleted automatically |
+| `NOTEBOOKLM_MCP_AUTH_TOKEN` | No | Set to a 16+ character secret to require `Authorization: Bearer <token>` on every HTTP/SSE MCP request (middleware in `mcp/http_auth.py`). Off by default; the server refuses to start with a shorter token |
 | `NOTEBOOKLM_ENABLE_MCP_PROBE` | No | Set to `1` to enable the background OS-keystore probe thread the MCP server starts on launch, which decides whether to attach a one-time "consider Protected mode" notice to a tool response. Disabled by default so the server has no non-essential background activity. |
 
 ### Resilience: rotated RPC IDs

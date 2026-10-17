@@ -155,6 +155,8 @@ Environment Variables:
   NOTEBOOKLM_HL                     Interface language and default artifact language (default: en)
   NOTEBOOKLM_QUERY_TIMEOUT          Query timeout in seconds (default: 120.0)
   NOTEBOOKLM_RATE_LIMIT_MAX_RETRIES Retry count for HTTP 429/RPC resource limits (default: 3; 0 disables)
+  NOTEBOOKLM_MCP_AUTH_TOKEN         Require 'Authorization: Bearer <token>' on HTTP/SSE requests
+                                    (16+ characters; default: no authentication)
   NOTEBOOKLM_ENABLE_MCP_PROBE       Set to 1 to enable the background OS-keystore probe that offers
                                     a one-time Protected-mode notice (default: disabled)
 
@@ -287,6 +289,27 @@ Examples:
                 "authentication. Do not expose this port to untrusted networks.",
                 stacklevel=2,
             )
+        from notebooklm_tools.mcp.http_auth import AUTH_TOKEN_ENV, build_http_middleware
+
+        try:
+            auth_middleware = build_http_middleware()
+        except ValueError as exc:
+            print(f"SECURITY ERROR: {exc}", file=sys.stderr)
+            sys.exit(1)
+        if auth_middleware:
+            print(
+                f"Bearer-token authentication enabled ({AUTH_TOKEN_ENV}). Clients must send "
+                "'Authorization: Bearer <token>'.",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"NOTE: no authentication. Any local process can use your saved Google session "
+                f"through this port. Set {AUTH_TOKEN_ENV} (16+ characters) to require a "
+                "bearer token.",
+                file=sys.stderr,
+            )
+
         if args.transport == "http":
             mcp.run(
                 transport="streamable-http",
@@ -294,6 +317,7 @@ Examples:
                 port=args.port,
                 path=args.path,
                 stateless_http=args.stateless,
+                middleware=auth_middleware,
                 show_banner=False,
             )
         else:
@@ -301,6 +325,7 @@ Examples:
                 transport="sse",
                 host=args.host,
                 port=args.port,
+                middleware=auth_middleware,
                 show_banner=False,
             )
 
