@@ -674,7 +674,7 @@ nlm batch add-source "https://..." --tags "research"
 
 nlm batch create "Project A, Project B, Project C"        # Create multiple
 nlm batch delete --notebooks "id1,id2" --confirm
-nlm batch studio audio --tags "research"
+nlm batch studio audio --tags "research" --confirm
 ```
 
 ### Cross-Notebook Query
@@ -693,9 +693,9 @@ Run predefined multi-step workflows on a notebook:
 
 ```bash
 nlm pipeline list                                         # List available pipelines
-nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..."
-nlm pipeline run research-and-report --notebook <id> --input-url "https://..."
-nlm pipeline run multi-format --notebook <id>             # Audio + report + flashcards
+nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..." --confirm
+nlm pipeline run research-and-report --notebook <id> --input-url "https://..." --confirm
+nlm pipeline run multi-format --notebook <id> --confirm             # Audio + report + flashcards
 ```
 
 **Built-in pipelines:**

@@ -228,6 +228,7 @@ def batch_studio(
     tags: list[str] | None = None,
     all_notebooks: bool = False,
     max_concurrent: int = 2,
+    confirm: bool = False,
 ) -> BatchResult:
     """Generate studio artifacts across multiple notebooks.
 
@@ -238,7 +239,17 @@ def batch_studio(
         tags: Select by tags
         all_notebooks: All notebooks
         max_concurrent: Max parallel (lower for heavy ops)
+        confirm: Must be True (generation consumes Studio quota on every target)
     """
+    if not confirm:
+        raise ValidationError(
+            "Batch studio requires confirm=True.",
+            user_message=(
+                "Batch Studio generation consumes quota on every target notebook. "
+                "Show the user the target notebooks and set confirm=True after approval."
+            ),
+        )
+
     targets = _resolve_targets(client, notebook_names, tags, all_notebooks)
     if not targets:
         return {"operation": "batch_studio", "items": [], "total": 0, "succeeded": 0, "failed": 0}

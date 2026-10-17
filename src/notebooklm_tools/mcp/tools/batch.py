@@ -24,7 +24,8 @@ def batch(
     - add_source: Add the same source URL to multiple notebooks
     - create: Create multiple notebooks at once
     - delete: Delete multiple notebooks (IRREVERSIBLE, requires confirm=True)
-    - studio: Generate studio artifacts across multiple notebooks
+    - studio: Generate studio artifacts across multiple notebooks (uses Studio quota
+      on every target, requires confirm=True)
 
     Args:
         action: Operation to perform (query, add_source, create, delete, studio)
@@ -35,7 +36,7 @@ def batch(
         notebook_names: Comma-separated notebook names or IDs
         tags: Comma-separated tags to select notebooks
         all: Apply to ALL notebooks
-        confirm: Must be True for delete action
+        confirm: Must be True for delete and studio actions
     """
     try:
         names = (
@@ -83,8 +84,17 @@ def batch(
             return {"status": "success", **result}
 
         elif action == "studio":
+            if not confirm:
+                return {
+                    "status": "error",
+                    "error": "Batch studio not confirmed. Show the user the target notebooks, "
+                    "then ask them to confirm before setting confirm=True.",
+                    "warning": "Studio generation consumes quota on every target notebook.",
+                }
             client = get_client()
-            result = batch_service.batch_studio(client, artifact_type, names, tag_list, all)
+            result = batch_service.batch_studio(
+                client, artifact_type, names, tag_list, all, confirm=True
+            )
             return {"status": "success", **result}
 
         else:

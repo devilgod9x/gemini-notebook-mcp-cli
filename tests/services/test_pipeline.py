@@ -8,6 +8,7 @@ from notebooklm_tools.services.errors import ValidationError
 from notebooklm_tools.services.pipeline import (
     _load_pipeline,
     _substitute_vars,
+    get_confirmation_actions,
     pipeline_create,
     pipeline_list,
     pipeline_run,
@@ -203,9 +204,68 @@ class TestPipelineRun:
             )
         )
 
-        result = pipeline_run(mock_client, "nb-001", "delete-test")
+        result = pipeline_run(mock_client, "nb-001", "delete-test", confirm=True)
         assert result["succeeded"] == 1
         mock_notebooks.delete_notebook.assert_called_once_with(mock_client, "nb-001")
+
+    @patch("notebooklm_tools.services.pipeline.notebooks_service")
+    def test_run_notebook_delete_requires_confirm(self, mock_notebooks, mock_client, pipelines_dir):
+        import yaml
+
+        pipeline_dir = pipelines_dir / "pipelines"
+        pipeline_dir.mkdir(parents=True, exist_ok=True)
+        (pipeline_dir / "delete-test.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "delete-test",
+                    "steps": [{"action": "notebook_delete", "params": {}}],
+                }
+            )
+        )
+
+        with pytest.raises(ValidationError, match="confirm=True"):
+            pipeline_run(mock_client, "nb-001", "delete-test")
+        mock_notebooks.delete_notebook.assert_not_called()
+
+    @patch("notebooklm_tools.services.pipeline.chat_service")
+    @patch("notebooklm_tools.services.pipeline.notebooks_service")
+    def test_confirm_checked_before_any_step_runs(
+        self, mock_notebooks, mock_chat, mock_client, pipelines_dir
+    ):
+        """A destructive step later in the pipeline must block the earlier steps too."""
+        import yaml
+
+        pipeline_dir = pipelines_dir / "pipelines"
+        pipeline_dir.mkdir(parents=True, exist_ok=True)
+        (pipeline_dir / "query-then-delete.yaml").write_text(
+            yaml.dump(
+                {
+                    "name": "query-then-delete",
+                    "steps": [
+                        {"action": "notebook_query", "params": {"query": "x"}},
+                        {"action": "notebook_delete", "params": {}},
+                    ],
+                }
+            )
+        )
+
+        with pytest.raises(ValidationError):
+            pipeline_run(mock_client, "nb-001", "query-then-delete")
+        mock_chat.query.assert_not_called()
+        mock_notebooks.delete_notebook.assert_not_called()
+
+    @patch("notebooklm_tools.services.pipeline.studio_service")
+    def test_studio_create_requires_confirm(self, mock_studio, mock_client, pipelines_dir):
+        with pytest.raises(ValidationError, match="studio_create"):
+            pipeline_run(mock_client, "nb-001", "multi-format")
+        mock_studio.create_artifact.assert_not_called()
+
+        mock_studio.create_artifact.return_value = {"artifact_id": "a"}
+        result = pipeline_run(mock_client, "nb-001", "multi-format", confirm=True)
+        assert result["succeeded"] == 3
+
+    def test_get_confirmation_actions(self, pipelines_dir):
+        assert get_confirmation_actions("multi-format") == ["studio_create"]
 
     @patch("notebooklm_tools.services.pipeline.chat_service")
     def test_run_with_variables(self, mock_chat, mock_client, pipelines_dir):

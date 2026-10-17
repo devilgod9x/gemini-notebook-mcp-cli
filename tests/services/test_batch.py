@@ -121,11 +121,17 @@ class TestBatchStudio:
     def test_studio_all(self, mock_client):
         with patch("notebooklm_tools.services.batch.studio_service") as mock_studio:
             mock_studio.create_artifact.return_value = {"artifact_id": "art-1"}
-            result = batch_studio(mock_client, "audio", all_notebooks=True)
+            result = batch_studio(mock_client, "audio", all_notebooks=True, confirm=True)
             assert result["total"] == 2
             assert result["operation"] == "batch_studio"
 
+    def test_studio_requires_confirm(self, mock_client):
+        with patch("notebooklm_tools.services.batch.studio_service") as mock_studio:
+            with pytest.raises(ValidationError):
+                batch_studio(mock_client, "audio", all_notebooks=True)
+            mock_studio.create_artifact.assert_not_called()
+
     def test_no_targets(self, mock_client):
         mock_client.list_notebooks.return_value = []
-        result = batch_studio(mock_client, "audio", all_notebooks=True)
+        result = batch_studio(mock_client, "audio", all_notebooks=True, confirm=True)
         assert result["total"] == 0

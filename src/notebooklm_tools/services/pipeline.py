@@ -63,6 +63,11 @@ VALID_ACTIONS = {
     "notebook_delete",
 }
 
+# Actions that are irreversible or consume Studio quota. A pipeline containing
+# any of them only runs with an explicit confirm=True, matching the standalone
+# notebook_delete / studio_create tools.
+CONFIRM_REQUIRED_ACTIONS = frozenset({"notebook_delete", "studio_create"})
+
 
 class StepResult(TypedDict):
     """Result of a single pipeline step."""
@@ -193,11 +198,47 @@ def _execute_step(
         )
 
 
+def _load_runnable_pipeline(pipeline_name: str) -> dict:
+    """Load a pipeline definition that has at least one step.
+
+    Raises:
+        ValidationError: If the pipeline is not found or has no steps
+    """
+    pipeline_def = _load_pipeline(pipeline_name)
+    if not pipeline_def:
+        raise ValidationError(
+            f"Pipeline '{pipeline_name}' not found.",
+            user_message=f"Pipeline '{pipeline_name}' not found. Use pipeline_list to see available pipelines.",
+        )
+
+    if not pipeline_def.get("steps", []):
+        raise ValidationError(
+            f"Pipeline '{pipeline_name}' has no steps.",
+            user_message=f"Pipeline '{pipeline_name}' is empty.",
+        )
+    return pipeline_def
+
+
+def get_confirmation_actions(pipeline_name: str) -> list[str]:
+    """Return the actions in a pipeline that require confirmation to run.
+
+    Lets wrappers show what a pipeline will do (deletes, Studio generation)
+    before asking the user to approve it.
+
+    Raises:
+        ValidationError: If the pipeline is not found or has no steps
+    """
+    steps = _load_runnable_pipeline(pipeline_name)["steps"]
+    found = {s.get("action", "") for s in steps} & CONFIRM_REQUIRED_ACTIONS
+    return sorted(found)
+
+
 def pipeline_run(
     client: NotebookLMClient,
     notebook_id: str,
     pipeline_name: str,
     variables: dict[str, str] | None = None,
+    confirm: bool = False,
 ) -> PipelineResult:
     """Execute a pipeline by name.
 
@@ -206,28 +247,34 @@ def pipeline_run(
         notebook_id: Target notebook UUID
         pipeline_name: Pipeline name (builtin or user-defined)
         variables: Variable substitutions (e.g. {"INPUT_URL": "https://..."})
+        confirm: Must be True when the pipeline deletes a notebook or creates
+            Studio artifacts (checked for every step before any step runs)
 
     Returns:
         PipelineResult with per-step results
 
     Raises:
-        ValidationError: If pipeline not found
+        ValidationError: If pipeline not found, or it needs confirmation and
+            ``confirm`` is not set
     """
     variables = variables or {}
 
-    # Look up pipeline definition
-    pipeline_def = _load_pipeline(pipeline_name)
-    if not pipeline_def:
-        raise ValidationError(
-            f"Pipeline '{pipeline_name}' not found.",
-            user_message=f"Pipeline '{pipeline_name}' not found. Use pipeline_list to see available pipelines.",
-        )
+    pipeline_def = _load_runnable_pipeline(pipeline_name)
+    steps = pipeline_def["steps"]
 
-    steps = pipeline_def.get("steps", [])
-    if not steps:
+    # Scan every step up front so a destructive step later in the pipeline
+    # cannot run after earlier steps already did their work.
+    risky = sorted({s.get("action", "") for s in steps} & CONFIRM_REQUIRED_ACTIONS)
+    if risky and not confirm:
+        actions = ", ".join(risky)
         raise ValidationError(
-            f"Pipeline '{pipeline_name}' has no steps.",
-            user_message=f"Pipeline '{pipeline_name}' is empty.",
+            f"Pipeline '{pipeline_name}' requires confirm=True ({actions}).",
+            user_message=(
+                f"Pipeline '{pipeline_name}' contains steps that need approval: {actions} "
+                f"(target notebook: {notebook_id}). notebook_delete is IRREVERSIBLE and "
+                "studio_create consumes Studio quota. Show these to the user and set "
+                "confirm=True after they approve."
+            ),
         )
 
     step_results: list[StepResult] = []

@@ -242,7 +242,7 @@ nlm batch query "Summarize" --all                         # Query ALL notebooks
 nlm batch add-source "https://..." --notebooks "id1,id2"
 nlm batch create "Project A, Project B, Project C"        # Create multiple
 nlm batch delete --notebooks "id1,id2" --confirm          # Delete multiple
-nlm batch studio audio --tags "research"                  # Generate across notebooks
+nlm batch studio audio --tags "research" --confirm                  # Generate across notebooks
 ```
 
 ### Cross-Notebook Query
@@ -257,9 +257,9 @@ nlm cross query "Summarize everything" --all              # Query ALL notebooks
 
 ```bash
 nlm pipeline list                                         # List available pipelines
-nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..."
-nlm pipeline run research-and-report --notebook <id> --input-url "https://..."
-nlm pipeline run multi-format --notebook <id>             # Audio + report + flashcards
+nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..." --confirm
+nlm pipeline run research-and-report --notebook <id> --input-url "https://..." --confirm
+nlm pipeline run multi-format --notebook <id> --confirm             # Audio + report + flashcards
 ```
 
 **Built-in pipelines:** `ingest-and-podcast`, `research-and-report`, `multi-format`

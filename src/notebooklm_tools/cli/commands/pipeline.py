@@ -20,18 +20,39 @@ def pipeline_run(
     pipeline_name: str = typer.Argument(..., help="Pipeline name"),
     notebook_id: str = typer.Option(..., "--notebook", "-n", help="Target notebook UUID"),
     input_url: str = typer.Option("", "--input-url", "-u", help="URL variable ($INPUT_URL)"),
+    confirm: bool = typer.Option(
+        False,
+        "--confirm",
+        "-y",
+        help="Skip confirmation for pipelines that delete notebooks or create Studio artifacts",
+    ),
 ) -> None:
-    """Execute a pipeline on a notebook."""
+    """Execute a pipeline on a notebook.
+
+    Exits with status 1 if any step fails.
+    """
     from notebooklm_tools.cli.utils import get_client
 
     try:
+        if not confirm:
+            risky = pipeline_service.get_confirmation_actions(pipeline_name)
+            if risky:
+                typer.confirm(
+                    f"Pipeline '{pipeline_name}' will run on notebook {notebook_id} and "
+                    f"includes: {', '.join(risky)}. notebook_delete is IRREVERSIBLE. Continue?",
+                    abort=True,
+                )
+                confirm = True
+
         client = get_client()
         variables = {}
         if input_url:
             variables["INPUT_URL"] = input_url
 
         with console.status(f"[dim]Running pipeline '{pipeline_name}'...[/dim]"):
-            result = pipeline_service.pipeline_run(client, notebook_id, pipeline_name, variables)
+            result = pipeline_service.pipeline_run(
+                client, notebook_id, pipeline_name, variables, confirm=confirm
+            )
 
         console.print(f"\n[bold]Pipeline:[/bold] {result['pipeline_name']}")
         console.print(
@@ -48,6 +69,11 @@ def pipeline_run(
                 console.print(
                     f"  [red]\u2717[/red] Step {step['step']}: {step['action']} — {step['error']}"
                 )
+
+        # Print every step first, then signal failure so scripts/schedulers
+        # don't continue with steps that depend on this pipeline.
+        if result["failed"] > 0:
+            raise typer.Exit(1)
 
     except ServiceError as e:
         console.print(f"[red]Error:[/red] {e.user_message}")
