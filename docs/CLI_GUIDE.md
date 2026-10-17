@@ -21,7 +21,8 @@ nlm login --check                 # Check if authenticated
 nlm login --storage protected     # New profile: store the login encrypted (or 'file'); skips the question
 nlm login switch <profile>        # Switch default profile
 nlm login profile list            # List all profiles with email addresses
-nlm login profile delete <name>   # Delete a profile
+nlm login profile delete <name>   # Delete a profile and its saved browser login
+nlm login profile forget-browser <name>  # Delete only the saved browser login (keeps credentials)
 nlm login profile rename <old> <new>  # Rename a profile
 nlm auth refresh                  # Non-interactive refresh (for schedulers)
 
@@ -33,6 +34,12 @@ For unattended machines, `nlm auth refresh` runs a headless-browser pass that
 makes Google reissue the short-lived cookies keeping a session alive — no
 interactive login. It exits non-zero on failure, so cron/launchd jobs can react.
 
+`nlm login profile delete` removes the profile's credentials **and** its saved browser
+folder (`chrome-profiles/<name>`, `firefox-profiles/<name>`), which holds a long-lived,
+unencrypted Google session. If the browser looks open the folder is skipped and you are told
+to run `forget-browser` later. After `forget-browser`, `nlm auth refresh` (headless) does not
+work until you log in again; `--force` overrides a stale lock, `-y` skips the prompt.
+
 Each profile gets its own isolated browser session (supports Chrome, Arc, Dia, Brave, Edge, Chromium, Firefox, and more), so you can stay logged into multiple Google accounts simultaneously.
 
 ### Credential Storage (Protected Mode)
@@ -43,7 +50,7 @@ Encrypted credential storage using your operating system's native keystore (macO
 # Check storage status
 nlm auth storage status
 nlm auth storage status --profile work
-nlm auth storage status --json
+nlm auth storage status --json           # includes plaintext_warning on Windows
 
 # Set storage mode (file or protected)
 nlm auth storage set protected            # in a terminal: pick which saved logins
@@ -51,6 +58,10 @@ nlm auth storage set protected --all      # every saved login at once
 nlm auth storage set protected --profile work
 nlm auth storage set file
 nlm auth storage set file --profile work
+
+# Windows only: limit the storage folder to your user + Local System (icacls)
+nlm auth storage harden --dry-run         # show the command, change nothing
+nlm auth storage harden                   # asks first; -y skips the prompt
 
 # Resolve storage conflicts
 nlm auth storage resolve file --profile work
@@ -242,7 +253,7 @@ nlm batch query "Summarize" --all                         # Query ALL notebooks
 nlm batch add-source "https://..." --notebooks "id1,id2"
 nlm batch create "Project A, Project B, Project C"        # Create multiple
 nlm batch delete --notebooks "id1,id2" --confirm          # Delete multiple
-nlm batch studio audio --tags "research" --confirm                  # Generate across notebooks
+nlm batch studio audio --tags "research" --confirm       # Generate across notebooks (uses Studio quota; prompts without --confirm)
 ```
 
 ### Cross-Notebook Query
@@ -263,6 +274,11 @@ nlm pipeline run multi-format --notebook <id> --confirm             # Audio + re
 ```
 
 **Built-in pipelines:** `ingest-and-podcast`, `research-and-report`, `multi-format`
+
+Pipelines with a `notebook_delete` or `studio_create` step (all three built-ins) ask for
+confirmation first; `--confirm` / `-y` skips the prompt, and is required when there is no
+terminal (cron, scripts, AI tools). Every step is checked before the first one runs. If a step
+fails, all steps are still printed and the command exits with status 1.
 
 Create custom pipelines: add YAML files to `~/.notebooklm-mcp-cli/pipelines/`
 

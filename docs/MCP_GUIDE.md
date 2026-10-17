@@ -302,11 +302,20 @@ cross_notebook_query(query="Everything", all=True)
 **`pipeline` actions:**
 ```python
 pipeline(action="list")  # List available pipelines
-pipeline(action="run", notebook_id="...", pipeline_name="ingest-and-podcast", input_url="https://...")
+pipeline(action="run", notebook_id="...", pipeline_name="ingest-and-podcast", input_url="https://...", confirm=True)
 pipeline(action="create", pipeline_name="mine", description="...", steps=[{"action": "notebook_query", "params": {"query": "Summarize"}}])
 ```
 
 **Built-in pipelines:** `ingest-and-podcast`, `research-and-report`, `multi-format`
+
+**Confirmation:** `action="run"` needs `confirm=True` when any step is `notebook_delete`
+(irreversible) or `studio_create` (uses Studio quota). All three built-ins contain
+`studio_create`. Every step is checked before the first one runs; show the user what will run
+and set `confirm=True` only after they approve. `batch(action="studio")` needs it too.
+
+**Result status:** `"success"` when every step succeeded, `"partial"` when a step failed after
+earlier ones succeeded, `"error"` when the first step failed. Failed runs include an `error`
+message and the per-step results.
 
 ### Tags & Smart Select (1 tool)
 
@@ -390,7 +399,7 @@ batch(action="studio", artifact_type="audio", tags="ai", confirm=True)
 pipeline(action="list")
 
 # Run a full ingest-and-podcast workflow
-pipeline(action="run", notebook_id="abc", pipeline_name="ingest-and-podcast", input_url="https://example.com")
+pipeline(action="run", notebook_id="abc", pipeline_name="ingest-and-podcast", input_url="https://example.com", confirm=True)
 ```
 
 ---
@@ -401,6 +410,13 @@ pipeline(action="run", notebook_id="abc", pipeline_name="ingest-and-podcast", in
 > network? Read [Remote MCP Deployment](REMOTE_MCP.md) first. HTTP transport
 > support does not provide HTTPS, caller authentication, per-user Gemini Notebook
 > accounts, or remote file transfer.
+
+### HTTP/SSE authentication
+
+HTTP and SSE have no authentication by default, so any local process that can reach the port
+can use your saved Google session. Set `NOTEBOOKLM_MCP_AUTH_TOKEN` (16+ characters, as an
+environment variable rather than a flag) to require `Authorization: Bearer <token>` on every
+request; others get `401`. This is not encryption. See [Remote MCP Deployment](REMOTE_MCP.md).
 
 ### MCP Server Options
 
