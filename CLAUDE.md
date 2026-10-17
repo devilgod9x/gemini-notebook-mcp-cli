@@ -239,6 +239,8 @@ don't read local skill folders.
 - All studio creation tools require `confirm=True` - show settings and get user approval first
 - `studio_delete` requires `confirm=True` - list artifacts first via `studio_status`, deletion is IRREVERSIBLE
 - `studio_revise` requires `confirm=True` - creates a new artifact with revisions applied
+- `batch(action="studio")` requires `confirm=True` (enforced in `services/batch.py`) - consumes Studio quota on every target notebook
+- `pipeline(action="run")` requires `confirm=True` when any step is `notebook_delete` or `studio_create` (enforced in `services/pipeline.py`, checked for ALL steps before the first one runs). Failed steps return `status` `error`/`partial` and `nlm pipeline run` exits 1
 - `report(action="generate")` requires `confirm=True` - starts generation of the plan's elements (without it, the plan is only validated)
 - `note_delete` requires `confirm=True` - deletion is IRREVERSIBLE
 

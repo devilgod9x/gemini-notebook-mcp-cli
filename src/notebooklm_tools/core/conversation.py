@@ -550,15 +550,18 @@ class ConversationMixin(BaseClient):
         # returns its own conversation ID which tracks the chat across sessions.
         if server_conv_id and server_conv_id != conversation_id:
             with self._state_lock:
-                # Migrate local cache to the server-assigned ID. Use
-                # move_to_end unconditionally so the migrated key is at MRU
-                # even if server_conv_id was already in the cache (in which
-                # case the assignment doesn't reorder it on its own).
+                # Migrate local cache to the server-assigned ID. move_to_end
+                # keeps the migrated key at MRU even if server_conv_id was
+                # already in the cache (assignment doesn't reorder it on its
+                # own). It is guarded because on a first turn with an empty
+                # cache neither ID exists yet; the turn-caching step below
+                # creates the entry.
                 if conversation_id in self._conversation_cache:
                     self._conversation_cache[server_conv_id] = self._conversation_cache.pop(
                         conversation_id
                     )
-                self._conversation_cache.move_to_end(server_conv_id)
+                if server_conv_id in self._conversation_cache:
+                    self._conversation_cache.move_to_end(server_conv_id)
             conversation_id = server_conv_id
 
         # Cache this turn for future follow-ups (only if we got an answer)

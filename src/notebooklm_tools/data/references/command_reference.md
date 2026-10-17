@@ -1157,16 +1157,16 @@ nlm batch query "Summarize" --notebooks "id1,id2"
 nlm batch add-source "https://example.com" --notebooks "id1,id2"
 nlm batch create "Project A, Project B"
 nlm batch delete --notebooks "id1,id2" --confirm
-nlm batch studio audio --tags "research"
+nlm batch studio audio --tags "research" --confirm
 ```
 
 ### Pipelines
 
 ```bash
 nlm pipeline list
-nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..."
-nlm pipeline run research-and-report --notebook <id> --input-url "https://..."
-nlm pipeline run multi-format --notebook <id>
+nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..." --confirm
+nlm pipeline run research-and-report --notebook <id> --input-url "https://..." --confirm
+nlm pipeline run multi-format --notebook <id> --confirm
 nlm pipeline create my-pipeline --file pipeline.yaml
 ```
 

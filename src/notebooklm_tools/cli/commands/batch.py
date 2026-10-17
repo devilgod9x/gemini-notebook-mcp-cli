@@ -147,10 +147,19 @@ def batch_studio(
     ),
     tags: str | None = typer.Option(None, "--tags", "-t", help="Comma-separated tags"),
     all_notebooks: bool = typer.Option(False, "--all", "-a", help="Generate for ALL notebooks"),
+    confirm: bool = typer.Option(False, "--confirm", "-y", help="Skip confirmation"),
 ) -> None:
     """Generate studio artifacts across multiple notebooks."""
     from notebooklm_tools.cli.utils import get_client
     from notebooklm_tools.services import batch as batch_service
+
+    if not confirm:
+        scope = "ALL notebooks" if all_notebooks else "the selected notebooks"
+        typer.confirm(
+            f"This will generate {artifact_type} artifacts for {scope} and use Studio quota "
+            "on each. Continue?",
+            abort=True,
+        )
 
     try:
         client = get_client()
@@ -159,7 +168,7 @@ def batch_studio(
 
         with console.status(f"[dim]Generating {artifact_type} artifacts...[/dim]"):
             result = batch_service.batch_studio(
-                client, artifact_type, names, tag_list, all_notebooks
+                client, artifact_type, names, tag_list, all_notebooks, confirm=True
             )
         _print_batch_result(result)
     except ServiceError as e:

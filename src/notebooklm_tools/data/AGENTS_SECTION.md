@@ -80,7 +80,7 @@ nlm flashcards create <id> --focus "Vocabulary" --confirm
 nlm tag add <id> --tags "ai,research"                     # Tag notebooks
 nlm batch query "Summarize" --tags "ai"                   # Batch query by tag
 nlm cross query "Compare approaches" --notebooks "id1,id2"  # Cross-notebook query
-nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..."
+nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..." --confirm
 ```
 
 ### Full Documentation

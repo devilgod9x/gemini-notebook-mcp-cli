@@ -54,10 +54,12 @@ nlm usage --json        # Return usage data as machine-readable JSON
 2. **Do not confuse network failures with expired auth**: `auth_status="unverified"` means the probe was inconclusive. Check connectivity or try an API call before asking the user to log in again.
 3. **Auto-Authentication Recovery**: The CLI includes automatic 3-layer auth recovery (CSRF refresh -> Token reload -> Headless Auth) and 3x server error retries. Most errors are handled automatically. You only need to manually run `nlm login` if all recovery layers fail. For unattended machines, `nlm auth refresh` refreshes a session non-interactively (headless) from a scheduler so it never lapses between jobs.
 4. **⚠️ ALWAYS ASK USER BEFORE DELETE**: Before executing ANY delete command, ask the user for explicit confirmation. Deletions are **irreversible**. Show what will be deleted and warn about permanent data loss.
-5. **Always obtain approval before generation or deletion**: Direct
-   `studio_create` and delete operations enforce `--confirm` / `confirm=True`.
-   The current MCP batch Studio path does not enforce its confirm parameter,
-   so the agent must preserve the approval gate.
+5. **Always obtain approval before generation or deletion**: `studio_create`,
+   delete operations, `batch` (delete and studio) and `pipeline run` for
+   pipelines containing `notebook_delete` or `studio_create` steps (all three
+   built-in pipelines do) enforce `--confirm` / `confirm=True`. Show the user
+   what will run, then pass it only after approval. The CLI prompts without
+   `--confirm`, and AI tools cannot answer prompts, so the examples below include it.
 6. **Research needs a destination**: Pass `--notebook-id <id>` for an existing notebook or `--title <title>` to create one.
 7. **Capture IDs from output**: Create/start commands return IDs needed for subsequent operations
 8. **Use aliases**: Simplify long UUIDs with `nlm alias set <name> <uuid>`
@@ -882,7 +884,7 @@ nlm batch query "Summarize" --all                      # Query ALL notebooks
 nlm batch add-source "https://..." --notebooks "id1,id2"
 nlm batch create "Project A, Project B, Project C"     # Create multiple
 nlm batch delete --notebooks "id1,id2" --confirm       # Delete multiple
-nlm batch studio audio --tags "research"                   # Generate across notebooks
+nlm batch studio audio --tags "research" --confirm                   # Generate across notebooks
 ```
 
 ### 13. Cross-Notebook Query
@@ -913,16 +915,20 @@ Define and execute multi-step notebook workflows. Three built-in pipelines plus 
 
 ```python
 pipeline(action="list")  # List available pipelines
-pipeline(action="run", notebook_id="...", pipeline_name="ingest-and-podcast", input_url="https://...")
+pipeline(action="run", notebook_id="...", pipeline_name="ingest-and-podcast", input_url="https://...", confirm=True)
 ```
+
+`confirm=True` is required when the pipeline deletes a notebook or creates Studio
+artifacts. A failed step returns `status` `"error"` (or `"partial"` if earlier steps
+succeeded) with per-step details; `nlm pipeline run` exits non-zero in that case.
 
 #### CLI Commands
 
 ```bash
 nlm pipeline list                                         # List available pipelines
-nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..."
-nlm pipeline run research-and-report --notebook <id> --input-url "https://..."
-nlm pipeline run multi-format --notebook <id>             # Audio + report + flashcards
+nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://..." --confirm
+nlm pipeline run research-and-report --notebook <id> --input-url "https://..." --confirm
+nlm pipeline run multi-format --notebook <id> --confirm             # Audio + report + flashcards
 nlm pipeline create my-pipeline --file pipeline.yaml
 ```
 
@@ -1055,10 +1061,10 @@ nlm tag add <id2> --tags "ai,product"
 nlm cross query "What are the main conclusions?" --tags "ai"
 
 # Batch generate podcasts for all tagged notebooks
-nlm batch studio audio --tags "ai"
+nlm batch studio audio --tags "ai" --confirm
 
 # Run a pipeline on a single notebook
-nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://example.com"
+nlm pipeline run ingest-and-podcast --notebook <id> --input-url "https://example.com" --confirm
 ```
 
 ## Error Recovery

@@ -295,6 +295,32 @@ class TestQueryUsesServerConversationId:
         assert result["conversation_id"] != "server-conv-id"
         assert len(result["conversation_id"]) == 36
 
+    def test_server_assigned_id_with_empty_cache(self):
+        """First turn with an empty cache: the server returns an ID different from
+        the client-generated one. query() must cache under the server ID instead of
+        raising KeyError from move_to_end on a key that does not exist yet."""
+        mixin = self._make_mixin()
+        assert mixin._conversation_cache == {}
+        with (
+            patch.object(mixin, "get_conversation_id", return_value=None),
+            patch.object(
+                mixin,
+                "_parse_query_response",
+                return_value=("An answer.", {}, "server-assigned-id"),
+            ),
+            patch("notebooklm_tools.core.conversation._httpx.Client") as mock_client_class,
+        ):
+            mock_response = mock_client_class.return_value.__enter__.return_value.post.return_value
+            mock_response.text = ""
+            mock_response.raise_for_status = lambda: None
+
+            result = mixin.query("nb-123", "Hello?", source_ids=["src-1"])
+
+        assert result["answer"] == "An answer."
+        assert result["conversation_id"] == "server-assigned-id"
+        assert list(mixin._conversation_cache.keys()) == ["server-assigned-id"]
+        assert result["turn_number"] == 1
+
     def test_new_conversation_skips_server_conversation_lookup(self):
         """Explicit fresh conversations do not reuse the server conversation."""
         mixin = self._make_mixin()

@@ -169,6 +169,28 @@ def load_cached_tokens(profile_name: str | None = None) -> AuthTokens | None:
         return None
 
 
+_REPLACE_RETRY_ATTEMPTS = 20
+_REPLACE_RETRY_DELAY_SECONDS = 0.05
+
+
+def _replace_with_retry(src: Path, dst: Path) -> None:
+    """os.replace with a bounded retry for transient Windows sharing violations.
+
+    On Windows, replacing a file fails with PermissionError while another handle
+    (a concurrent reader, antivirus, an indexer) has it open. The handle is
+    normally released within milliseconds, so retry briefly before giving up.
+    POSIX never needs this and fails immediately.
+    """
+    for attempt in range(_REPLACE_RETRY_ATTEMPTS):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if os.name != "nt" or attempt == _REPLACE_RETRY_ATTEMPTS - 1:
+                raise
+            time.sleep(_REPLACE_RETRY_DELAY_SECONDS)
+
+
 def _atomic_write_json(target_path: Path, data: Any) -> None:
     """Write JSON data to a target path atomically with 0600 permissions."""
     import secrets
@@ -187,7 +209,7 @@ def _atomic_write_json(target_path: Path, data: Any) -> None:
             with contextlib.suppress(OSError):
                 os.close(fd)
             raise
-        os.replace(tmp_path, target_path)
+        _replace_with_retry(tmp_path, target_path)
     finally:
         if tmp_path.exists():
             with contextlib.suppress(OSError):
@@ -573,10 +595,7 @@ class AuthManager:
 
         # File mode: load legacy plaintext files
         try:
-            cookies = json.loads(self.cookies_file.read_text(encoding="utf-8"))
-            metadata = {}
-            if self.metadata_file.exists():
-                metadata = json.loads(self.metadata_file.read_text(encoding="utf-8"))
+            cookies, metadata = self._read_file_mode_files()
 
             self._profile = Profile(
                 name=self.profile_name,
@@ -599,6 +618,35 @@ class AuthManager:
                 message=f"Failed to load profile '{self.profile_name}': {e}",
                 hint="The profile may be corrupted. Try 'nlm login' to re-authenticate.",
             ) from e
+
+    def _read_file_mode_files(self) -> tuple[Any, dict[str, Any]]:
+        """Read cookies.json and metadata.json for a File mode profile.
+
+        Takes the profile lock so a concurrent save_profile (which swaps both
+        files with os.replace) cannot hit a half-written or locked file, which on
+        Windows surfaces as PermissionError. The lock is re-entrant within the
+        process. If the lock cannot be created at all (read-only storage dir),
+        fall back to an unlocked read, which is what this path did before.
+        """
+        from notebooklm_tools.core.credential_store import get_profile_lock
+
+        try:
+            lock = get_profile_lock(self.profile_name)
+            lock.acquire()
+        except OSError:
+            return self._read_file_mode_files_unlocked()
+
+        try:
+            return self._read_file_mode_files_unlocked()
+        finally:
+            lock.release()
+
+    def _read_file_mode_files_unlocked(self) -> tuple[Any, dict[str, Any]]:
+        cookies = json.loads(self.cookies_file.read_text(encoding="utf-8"))
+        metadata: dict[str, Any] = {}
+        if self.metadata_file.exists():
+            metadata = json.loads(self.metadata_file.read_text(encoding="utf-8"))
+        return cookies, metadata
 
     def save_profile(
         self,
