@@ -22,6 +22,7 @@ MAPPING = {
     "auth refresh": "refresh_auth",
     "auth storage status": "profile",
     "auth storage set": CLI_ONLY,
+    "auth storage harden": CLI_ONLY,
     "auth storage resolve": CLI_ONLY,
     "auth storage relocate": CLI_ONLY,
     "batch add-source": "batch",

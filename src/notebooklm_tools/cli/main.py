@@ -1222,6 +1222,48 @@ def storage_status(
         raise typer.Exit(1) from e
 
 
+@storage_app.command("harden")
+def storage_harden(
+    confirm: bool = typer.Option(False, "--confirm", "-y", help="Skip confirmation prompt"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show the icacls command and exit"),
+) -> None:
+    """Restrict the login storage folder to your Windows user (Windows only).
+
+    Windows ignores the 0600 permission the app requests, so by default the saved
+    login files are readable by anything running as your user and by any other
+    account the folder's inherited permissions allow. This limits the folder to
+    you and Local System. Protected mode (`nlm auth storage set protected`) is
+    still the stronger option.
+    """
+    from notebooklm_tools.services.auth_storage import harden_storage_permissions
+    from notebooklm_tools.services.errors import ServiceError
+
+    try:
+        preview = harden_storage_permissions(dry_run=True)
+        if not preview["supported"]:
+            console.print(
+                "[dim]Nothing to do: macOS/Linux already get owner-only (0600/0700) "
+                "permissions.[/dim]"
+            )
+            return
+        console.print(f"[bold]Folder:[/bold] {preview['path']}")
+        console.print(f"[dim]{' '.join(preview['command'])}[/dim]")
+        if dry_run:
+            return
+        if not confirm:
+            typer.confirm(
+                "Remove inherited access and grant only your user and Local System?",
+                abort=True,
+            )
+        harden_storage_permissions()
+    except ServiceError as exc:
+        console.print(f"[red]Error:[/red] {exc.user_message}")
+        raise typer.Exit(1) from exc
+    console.print(
+        "[green]✓[/green] Storage folder is now restricted to your user and Local System."
+    )
+
+
 @storage_app.command("set")
 def storage_set(
     mode: str = typer.Argument(..., help="Storage mode: 'file' or 'protected'"),

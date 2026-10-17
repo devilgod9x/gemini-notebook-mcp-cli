@@ -53,7 +53,7 @@ WINDOWS_FILE_MODE_WARNING = (
     "0600 permission is not enforced, so any program running as your Windows user "
     "can read them, and they would give access to your whole Google account. "
     "Run 'nlm auth storage set protected' to encrypt them with the Windows "
-    "Credential Manager."
+    "Credential Manager, or 'nlm auth storage harden' to limit the folder to your user."
 )
 
 
@@ -976,3 +976,93 @@ def forget_browser_session(profile_name: str, force: bool = False) -> BrowserSes
             ) from exc
         removed.append(str(path))
     return BrowserSessionForgetResult(profile=profile_name, removed=removed, skipped_in_use=skipped)
+
+
+class StorageHardenResult(TypedDict):
+    """Result of restricting the storage folder to its owner."""
+
+    supported: bool
+    path: str
+    command: list[str]
+    applied: bool
+
+
+_SYSTEM_SID = "S-1-5-18"  # Local System: keeps Windows Defender and backups working
+
+
+def _current_user_sid() -> str:
+    """Return the Windows SID of the current user (via `whoami /user`)."""
+    import csv
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["whoami", "/user", "/fo", "csv", "/nh"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=True,
+        )
+        row = next(csv.reader(proc.stdout.splitlines()))
+        sid = row[1].strip()
+    except (OSError, subprocess.SubprocessError, StopIteration, IndexError) as exc:
+        raise ServiceError(
+            f"Could not determine the current Windows user SID: {exc}",
+            user_message="Could not determine your Windows user. Nothing was changed.",
+        ) from exc
+    if not sid.startswith("S-1-"):
+        raise ServiceError(
+            f"Unexpected SID from whoami: {sid!r}",
+            user_message="Could not determine your Windows user. Nothing was changed.",
+        )
+    return sid
+
+
+def harden_storage_permissions(dry_run: bool = False) -> StorageHardenResult:
+    """Restrict the storage folder (~/.notebooklm-mcp-cli) to the current user on Windows.
+
+    Windows does not honour the 0600/0700 modes the app requests, so the folder
+    normally just inherits the user profile's ACL. This removes inherited access
+    and grants full control only to the current user and Local System (kept so
+    antivirus and backup services keep working). Sub-folders and files created
+    afterwards inherit it. Other platforms enforce owner-only modes already, so
+    this does nothing there.
+
+    Args:
+        dry_run: Return the command that would run without running it
+    """
+    storage = get_storage_dir()
+    if sys.platform != "win32":
+        return StorageHardenResult(supported=False, path=str(storage), command=[], applied=False)
+
+    sid = _current_user_sid()
+    command = [
+        "icacls",
+        str(storage),
+        "/inheritance:r",
+        "/grant:r",
+        f"*{sid}:(OI)(CI)F",
+        "/grant:r",
+        f"*{_SYSTEM_SID}:(OI)(CI)F",
+    ]
+    if dry_run:
+        return StorageHardenResult(
+            supported=True, path=str(storage), command=command, applied=False
+        )
+
+    import subprocess
+
+    try:
+        proc = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ServiceError(
+            f"icacls failed to run: {exc}",
+            user_message="Could not run icacls. Permissions were not changed.",
+        ) from exc
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()[:300]
+        raise ServiceError(
+            f"icacls exited with {proc.returncode}: {detail}",
+            user_message=f"icacls could not change the permissions: {detail}",
+        )
+    return StorageHardenResult(supported=True, path=str(storage), command=command, applied=True)
