@@ -21,6 +21,7 @@ tat ca tool), xem cac file do — tai lieu nay chi di qua luong su dung chinh.
 - [6. Xac minh moi thu hoat dong](#6-xac-minh-moi-thu-hoat-dong)
 - [7. Cac lenh kiem tra/chan doan huu ich](#7-cac-lenh-kiem-trachan-doan-huu-ich)
 - [8. Xu ly su co thuong gap](#8-xu-ly-su-co-thuong-gap)
+- [9. Cac thao tac can xac nhan](#9-cac-thao-tac-can-xac-nhan)
 
 ---
 
@@ -104,6 +105,45 @@ nlm login profile list           # liet ke tat ca profile + email
 nlm login profile rename work main
 nlm login profile delete work
 ```
+
+**Xoa profile (va phien trinh duyet da luu):**
+
+```bash
+nlm login profile delete work            # xoa credential VA thu muc dang nhap trinh duyet
+nlm login profile forget-browser work    # chi xoa phien trinh duyet, giu credential
+```
+
+`nlm login` con giu mot thu muc trinh duyet rieng cho moi profile
+(`chrome-profiles/<ten>` hoac `firefox-profiles/<ten>`) de tu dang nhap lai
+ngam duoc. Thu muc nay chua **phien Google dai han, chua duoc ma hoa**, ke ca
+khi ban dung Protected mode. Lenh `delete` gio xoa luon thu muc nay (neu
+trinh duyet dang mo thi bo qua va bao ban cach xoa sau). Sau `forget-browser`,
+lan `nlm login` tiep theo se bat dau tu trinh duyet chua dang nhap, va
+`nlm auth refresh` (dang nhap lai ngam) khong dung duoc cho den khi ban dang
+nhap lai.
+
+### Bao ve du lieu dang nhap Google tren may
+
+Cookie Google la chia khoa cua **ca tai khoan Google** (Gmail, Drive...), khong
+chi cua NotebookLM. Mot so viec nen lam:
+
+1. **Xem dang o che do nao:** `nlm auth storage status`. Neu thay
+   `Storage mode: file` kem canh bao tren Windows, cookie dang luu dang van
+   ban thuong.
+2. **Chuyen sang Protected (nen lam tren may ca nhan):**
+   `nlm auth storage set protected`. Dong `notebooklm-mcp` truoc khi chay.
+3. **Neu phai dung File mode tren Windows:** `nlm auth storage harden` gioi han
+   thu muc luu tru cho tai khoan cua ban (dung `--dry-run` de xem lenh `icacls`
+   truoc). Cach nay khong ma hoa, chi han che ai doc duoc.
+4. **Tat ban sao `auth.json` o thu muc goc** (chi can cho script cu): dat bien
+   moi truong `NOTEBOOKLM_DISABLE_ROOT_AUTH_MIRROR=1`. File da co san khong bi
+   xoa tu dong, ban tu xoa khi chac khong con script nao doc no.
+5. **Nghi ngo bi lo:** vao myaccount.google.com, dang xuat thiet bi / thu hoi
+   phien. Day la cach duy nhat vo hieu hoa cookie da bi sao chep.
+
+Luu y: Protected mode chong lai viec sao chep file/backup, **khong** chong lai
+phan mem doc hai chay cung tai khoan Windows, va khong ma hoa thu muc trinh duyet
+o tren.
 
 **Kiem tra da dang nhap dung chua:**
 
@@ -196,8 +236,23 @@ notebooklm-mcp --transport http --host 127.0.0.1 --port 8000
 Endpoint khi chay HTTP: `http://127.0.0.1:8000/mcp` (health check tai
 `http://127.0.0.1:8000/health`).
 
+Mac dinh HTTP **khong yeu cau xac thuc**, nghia la bat ky chuong trinh nao
+tren may ban goi duoc toi port nay deu dung duoc phien Google da luu. De yeu
+cau bearer token, dat bien moi truong (khong nen dung flag dong lenh vi se lo
+trong danh sach tien trinh) truoc khi chay:
+
+```bash
+export NOTEBOOKLM_MCP_AUTH_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+notebooklm-mcp --transport http
+# client phai gui header:  Authorization: Bearer <token>
+```
+
+Token phai tu 16 ky tu tro len, neu ngan hon server tu choi khoi dong. Request
+thieu hoac sai token nhan ma `401`. Day khong phai ma hoa: tren duong ra khoi
+may ban van can HTTPS.
+
 > ⚠️ **Canh bao bao mat:** `notebooklm-mcp` **khong co co che xac thuc
-> rieng** o tang HTTP. Mac dinh no tu choi bind ra ngoai `127.0.0.1`
+> rieng** o tang HTTP (tru khi ban bat token o tren). Mac dinh no tu choi bind ra ngoai `127.0.0.1`
 > (bao loi va thoat) tru khi ban chu dong set
 > `NOTEBOOKLM_ALLOW_EXTERNAL_BIND=1`. **Khong bao gio** expose port nay
 > thang ra Internet — bat ky ai goi toi deu co toan quyen tren tai khoan
@@ -238,8 +293,31 @@ nlm --version            # Xem phien ban, tu kiem tra co ban moi tren PyPI khong
 | `nlm setup add claude-desktop` bao Claude Desktop con dang chay | App chua dong han, hoac tien trinh Crashpad con sot (macOS) | Dong han app roi chay lai; xem [Known Issues #6](KNOWN_ISSUES.md#6-claude-desktop-profile-setup) |
 | Loi lien quan Keychain/Credential Manager (macOS/Windows) | Protected mode can quyen OS keystore, co the bi hoi lai khi doi Python/uv | Nhap mat khau dang nhap may, chon "Always Allow"; xem [Known Issues #8](KNOWN_ISSUES.md#8-protected-mode--keystore-environments) |
 | Loi lien quan RPC/response bat thuong (vi du sau khi Google cap nhat NotebookLM) | Google doi protocol noi bo | Chay voi `--debug`; neu la loi protocol that su, xem [Known Issues #4](KNOWN_ISSUES.md#4-api-instability-undocumented-internal-apis) va (cho nguoi muon tu sua code) [Protocol Maintenance Guide](PROTOCOL_MAINTENANCE.md) |
+| `nlm pipeline run` / `nlm batch studio` dung lai o cau hoi xac nhan khi chay tu dong (cron, script, AI tool) | Hai lenh nay gio hoi xac nhan vi co the xoa notebook hoac ton quota Studio | Them `--confirm` (hoac `-y`) sau khi da kiem tra no se lam gi; xem [muc 9](#9-cac-thao-tac-can-xac-nhan) |
+| Goi `pipeline` qua MCP bao loi "requires confirm=True" | Pipeline co buoc `notebook_delete` hoac `studio_create` | Hoi nguoi dung truoc, roi goi lai voi `confirm=True` |
 | Chay tren server/Docker/SSH, Protected mode bao loi keystore | Protected mode can desktop session, khong dung duoc tren headless | Dung File mode: `nlm auth storage set file` |
 
 Can chan doan sau hon chua co trong bang nay? Chay `nlm doctor` truoc, roi
 xem [Known Issues](KNOWN_ISSUES.md) hoac [Authentication Guide →
 Troubleshooting](AUTHENTICATION.md#troubleshooting).
+
+## 9. Cac thao tac can xac nhan
+
+Mot so thao tac khong the hoan tac hoac ton quota, nen tool tu choi chay neu
+ban khong xac nhan ro rang. Voi AI assistant, hay de no **hien thi se lam gi
+va hoi ban truoc**, chi dat xac nhan sau khi ban dong y.
+
+| Thao tac | Qua MCP | Qua CLI |
+|---|---|---|
+| Xoa notebook / nguon / ghi chu | `confirm=True` | `--confirm` / `-y` (hoac tra loi y) |
+| Tao Studio (audio, video, bao cao...) | `confirm=True` | chay truc tiep, khong hoi (tu ban go lenh) |
+| `batch` xoa hoac tao Studio nhieu notebook | `confirm=True` | `nlm batch delete\|studio ... --confirm` |
+| `pipeline run` co buoc `notebook_delete` hoac `studio_create` (ca 3 pipeline co san deu co `studio_create`) | `confirm=True` | `nlm pipeline run ... --confirm` |
+
+Voi pipeline, **moi buoc duoc kiem tra truoc khi buoc dau tien chay**, nen mot
+buoc xoa o cuoi cung cung chan ca pipeline neu thieu xac nhan.
+
+Ket qua pipeline: neu mot buoc loi, MCP tra `status` la `error` (hoac `partial`
+neu cac buoc truoc da xong) kem chi tiet tung buoc, con `nlm pipeline run` in
+het cac buoc roi thoat voi ma `1`. Script/cron co the dua vao ma thoat de dung
+cac buoc phu thuoc.
